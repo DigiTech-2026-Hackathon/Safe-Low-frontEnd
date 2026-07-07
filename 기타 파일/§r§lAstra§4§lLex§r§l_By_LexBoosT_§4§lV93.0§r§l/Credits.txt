@@ -1,0 +1,35 @@
+Credits:
+
+-Capt Tatsu for BSL Shaders base
+
+-EminGT for many help | LightShaft | Round Sun/Moon | Many other things
+
+-ShinoNeiluj (second developer) for many Help | Coding | Advising | Knowledge | Many other things | Being my childhood best friend (IRL)
+
+-TechDev (Lux Shaders) for Dof Rejection. https://github.com/TechDevOnGitHub
+
+-fayer3 for New End Portal
+
+-Seishin for CRT Border (Molly/Raspberry Shader)
+
+-Chocapic for New Rain style | Reprojection
+
+-Sildur for the full Border. (Sildur's Vibrant)
+
+-BigWings for New Raindrop on screen
+
+-sp614x for Optifine !
+
+-XDom36 for in-depth testing
+
+-Mammoth for in-depth testing on Apple devices
+
+-Chopper for testing on AMD Hardware
+
+-The ShaderLABS community and all those that I forgot
+
+-Zhihuideerha for the Chinese translation
+
+-All the users of this Shaders Pack
+
+You are all awesome! Thanks!

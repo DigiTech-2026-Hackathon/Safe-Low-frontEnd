@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Altroboard</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root { --bg-color: #0e0d0a; --hover-bg: #211f1b; --text-gray: #9c9a95; --text-white: #ffffff; --accent-red: #f15a42; --collapsed-width: 80px; --expanded-width: 260px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Pretendard', sans-serif; }
+        body { background-color: #1a1a1a; display: flex; height: 100vh; }
+        .sidebar { width: var(--collapsed-width); background-color: var(--bg-color); height: 100%; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; white-space: nowrap; border-right: 1px solid #1f1d1a; }
+        .sidebar:hover { width: var(--expanded-width); }
+        .sidebar-header { height: 80px; display: flex; align-items: center; padding: 0; justify-content: flex-start; }
+        .menu-wrapper { width: var(--collapsed-width); display: flex; justify-content: center; align-items: center; flex-shrink: 0; }
+        .logo-text { color: var(--accent-red); font-size: 26px; font-weight: 700; opacity: 0; transition: opacity 0.2s; letter-spacing: -1px; }
+        .sidebar:hover .logo-text { opacity: 1; }
+        .nav-list { list-style: none; padding: 0 12px; flex: 1; }
+        .nav-item { display: flex; align-items: center; height: 56px; border-radius: 12px; cursor: pointer; color: var(--text-gray); transition: all 0.2s ease; margin-bottom: 8px; text-decoration: none; }
+        .icon-box { width: calc(var(--collapsed-width) - 24px); height: 100%; display: flex; justify-content: center; align-items: center; flex-shrink: 0; }
+        .nav-item i { width: 24px; height: 24px; }
+        .nav-text { font-size: 17px; font-weight: 500; margin-left: 8px; opacity: 0; transition: opacity 0.2s; }
+        .sidebar:hover .nav-text { opacity: 1; }
+        .nav-item:hover, .nav-item.active { background-color: var(--hover-bg); color: var(--text-white); }
+        .sidebar-footer { padding: 20px 12px 40px 12px; }
+        .login-btn { display: flex; align-items: center; height: 56px; color: var(--accent-red); text-decoration: none; border-radius: 12px; }
+        .login-btn .nav-text { color: var(--accent-red); font-weight: 600; }
+        .content { flex: 1; display: flex; justify-content: center; align-items: center; color: #444; font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header"><div class="menu-wrapper"><i data-lucide="menu" style="color:white; cursor:pointer;"></i></div><span class="logo-text">altroboard</span></div>
+        <ul class="nav-list">
+            <li class="nav-item"><div class="icon-box"><i data-lucide="home"></i></div><span class="nav-text">홈</span></li>
+            <li class="nav-item"><div class="icon-box"><i data-lucide="info"></i></div><span class="nav-text">소개</span></li>
+            <li class="nav-item"><div class="icon-box"><i data-lucide="layout-grid"></i></div><span class="nav-text">게시판</span></li>
+            <li class="nav-item active"><div class="icon-box"><i data-lucide="image"></i></div><span class="nav-text">갤러리</span></li>
+            <li class="nav-item"><div class="icon-box"><i data-lucide="play-square"></i></div><span class="nav-text">쇼츠</span></li>
+            <li class="nav-item"><div class="icon-box"><i data-lucide="book-open"></i></div><span class="nav-text">학습</span></li>
+            <li class="nav-item"><div class="icon-box"><i data-lucide="trending-up"></i></div><span class="nav-text">외부데이터</span></li>
+            <li class="nav-item"><div class="icon-box"><i data-lucide="gamepad-2"></i></div><span class="nav-text">게임</span></li>
+        </ul>
+        <div class="sidebar-footer"><a href="#" class="login-btn"><div class="icon-box"><i data-lucide="log-in"></i></div><span class="nav-text">로그인</span></a></div>
+    </nav>
+    <div class="content">사이드바에 마우스를 올려보세요.</div>
+    <script>lucide.createIcons();</script>
+</body>
+</html>
+
+<!-- 피드백 입니다. 아직 잘 하지는 못 하지만 그래도 모르는 사람이 보면 더 잘 보인다는 말이 있어서 한번 해 보려고 합니다. (그냥 진짜 아무거나 보이는거 피드백 하는거니까 그냥 참고용으로 봐주세요!) 
+일단 사이드 메뉴에서 불변한 점이 있었습니다. 사이드바를 호버 했을때 아이콘들이 갑자기 순간이동해서 자리를 잡고, 접힐때도 갑자기 순간 이동 되는 것 처럼 되는 부분이 있습니다. 그래서 저는 그냥 위의 코드처럼 아이콘은 움직이지 않고, 
+길이를 늘리고 글씨를 추가하는 방법도 괜찮다고 생각 했습니다. 그리고 로그인 버튼이 나가기, 로그아웃같이 부정적인 느낌이라서 로그아웃 상태일때는 하얀색이나 다른 아이콘으로 두고, 로그인 했을때는 지금을 유지하고 로그인을 로그아웃으로만 바꿔도 괜찮을 것 같습니다. 
+그리고 이제 아래부터 피드백 입니다. 1번쨰, 3번째 게임은 의도 하신건지 모르겠지만 끝에 가도 죽지 않습니다. 그리고 학습 기록 창에서 날짜 왼쪽에 작은 빨간 점이 찍혀있습니다. 나머지 부분은 제가 못 본것도 있지만
+너무 잘 만드셨습니다!!-->

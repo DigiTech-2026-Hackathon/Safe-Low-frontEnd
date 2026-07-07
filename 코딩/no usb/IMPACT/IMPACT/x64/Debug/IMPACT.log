@@ -1,0 +1,1 @@
+﻿C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VC\v180\Microsoft.CppCommon.targets(375,9): error MSB4184: ""S".Substring(6)" 식을 계산할 수 없습니다. startIndex는 문자열의 길이보다 클 수 없습니다. 매개 변수 이름: startIndex

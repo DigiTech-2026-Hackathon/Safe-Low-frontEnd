@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="../ISD/ISD.vcxproj" Id="752f290e-0421-41cd-b465-372261bb2431" />
+</Solution>

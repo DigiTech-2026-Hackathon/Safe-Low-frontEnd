@@ -1,0 +1,99 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: sans-serif;
+}
+
+body {
+  background: #111;
+}
+
+/* 사이드바 기본 */
+.sidebar {
+  width: 220px;
+  height: 100vh;
+  background: #1a0f05;
+  color: #ccc;
+  display: flex;
+  flex-direction: column;
+  transition: 0.3s;
+}
+
+/* 접혔을 때 */
+.sidebar.close {
+  width: 70px;
+}
+
+/* 로고 */
+.logo {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  font-size: 18px;
+  color: #eee;
+}
+
+.logo span {
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+.logo h1 span {
+  color: #ff4d3d;
+}
+
+/* 메뉴 */
+.menu {
+  list-style: none;
+  margin-top: 20px;
+}
+
+.menu li {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  cursor: pointer;
+  transition: 0.2s;
+  border-radius: 10px;
+  margin: 5px 10px;
+}
+
+/* hover 효과 */
+.menu li:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* 선택된 메뉴 */
+.menu li.active {
+  background: rgba(255,255,255,0.15);
+}
+
+/* 아이콘 */
+.menu li span {
+  font-size: 20px;
+  width: 30px;
+}
+
+/* 텍스트 */
+.menu li p {
+  margin-left: 10px;
+  white-space: nowrap;
+}
+
+/* 접혔을 때 텍스트 숨김 */
+.sidebar.close .menu li p {
+  display: none;
+}
+
+/* 로그인 */
+.login {
+  margin-top: auto;
+  padding: 20px;
+  color: #ff4d3d;
+  cursor: pointer;
+}
+
+.sidebar.close .login {
+  text-align: center;
+}
