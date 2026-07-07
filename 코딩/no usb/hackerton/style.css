@@ -1,4 +1,4 @@
-/* 모든 선택자당 정확히 한 줄 구성 - 반원 게이지 오버레이 및 누락 요소 보정 완료 */
+/* 모든 선택자당 정확히 한 줄 구성 - 중앙 모달 UI 및 맵 캔버스 레이아웃 반영 완료 */
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 body, html { width: 100%; height: 100%; background-color: #f0f2f5; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
 .phone-wrapper { width: 100%; max-width: 412px; height: 100vh; max-height: 892px; background: #fff; box-shadow: 0 4px 24px rgba(0,0,0,0.15); display: flex; flex-direction: column; position: relative; overflow: hidden; }
@@ -17,7 +17,7 @@ body, html { width: 100%; height: 100%; background-color: #f0f2f5; display: flex
 .legend-rect { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
 .map-controls { position: absolute; top: 115px; right: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 10; }
 .btn-ctrl { width: 34px; height: 34px; background: white; border: 1px solid #ccc; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.map-overlay-circle { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5; transition: all 0.2s; }
+.map-overlay-circle { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 5; pointer-events: none; }
 .map-marker-center { width: 16px; height: 16px; background: #007aff; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.4); }
 .map-marker-label { background: #1e293b; color: white; padding: 6px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; white-space: nowrap; position: absolute; top: 60%; box-shadow: 0 2px 6px rgba(0,0,0,0.25); display: flex; gap: 4px; align-items: center; }
 .bottom-sheet { background: white; border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 14px 16px 16px 16px; box-shadow: 0 -4px 16px rgba(0,0,0,0.08); shrink: 0; z-index: 10; }
@@ -88,3 +88,13 @@ body, html { width: 100%; height: 100%; background-color: #f0f2f5; display: flex
 .act-btn.red-text { color: #dc2626; }
 .act-btn.green-text { color: #16a34a; }
 .act-btn.blue-text { color: #2563eb; }
+.custom-modal-backdrop { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,23,42,0.6); z-index: 999; display: none; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(2px); }
+.custom-modal-window { background: white; width: 100%; max-width: 320px; border-radius: 16px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: center; animation: modalPop 0.25s ease-out; }
+.modal-header { font-size: 16px; font-weight: bold; color: #1e293b; margin-bottom: 10px; }
+.modal-body { font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 20px; word-break: keep-all; }
+.modal-btn-close { width: 100%; background: #007aff; color: white; border: none; padding: 12px 0; border-radius: 10px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background 0.15s; }
+.modal-btn-close:active { background: #0056b3; }
+.gauge-container {width: 100px;height: 50px;position: relative;overflow: hidden;flex-shrink: 0;margin-right: 8px;}
+.gauge-track {width: 100px;height: 100px;border: 8px solid #334155;border-radius: 50%;position: absolute;top: 0;left: 0;box-sizing: border-box; }
+.gauge-bar {width: 100px;height: 100px;border: 8px solid #ef4444;border-radius: 50%;position: absolute;top: 0;left: 0;box-sizing: border-box;border-left-color: transparent !important;border-bottom-color: transparent !important;transform: rotate(-45deg);transform-origin: center center;transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+@keyframes modalPop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }

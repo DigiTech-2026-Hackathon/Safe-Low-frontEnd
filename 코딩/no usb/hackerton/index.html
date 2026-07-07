@@ -22,7 +22,7 @@
                 <div class="alert-banner">🚨 호우경보 · 대피소 활성화</div>
             </div>
 
-            <div class="map-area">
+            <div class="map-area" id="map-canvas">
                 <div class="map-legend">
                     <div class="legend-item"><span class="legend-color" style="background:#ef4444;"></span>위험</div>
                     <div class="legend-item"><span class="legend-color" style="background:#f59e0b;"></span>경고</div>
@@ -69,7 +69,7 @@
                         <div class="header-subtitle" id="api-report-addr">서울 관악구 신림동 1234-5 · 반지하</div>
                     </div>
                 </div>
-                <button class="btn-text" onclick="apiTrigger('공유 API')">공유</button>
+                <button class="btn-text" onclick="showCustomModal('공유하기', '현재 위치의 위험 리포트 링크가 클립보드에 복사되었습니다.')">공유</button>
             </header>
 
             <main class="scroll-content">
@@ -102,7 +102,7 @@
 
                 <div class="section-title-container">
                     <div class="section-title">위험 요인 분석 (F-06)</div>
-                    <div style="font-size:11px; color:#007aff; cursor:pointer;" onclick="apiTrigger('LLM 요인별 정밀 세부 분해 API')">LLM 분해</div>
+                    <div style="font-size:11px; color:#007aff; cursor:pointer;" onclick="showCustomModal('LLM 정밀 분해', '심층 분석 엔진 가동: 지형 구조 및 하수 역류 계수를 실시간 분해하고 있습니다.')">LLM 분해</div>
                 </div>
 
                 <div style="background:white; border-radius:12px; padding:14px; border:1px solid #e5e7eb; margin-bottom:14px;">
@@ -129,7 +129,7 @@
                         <div class="header-subtitle">F-04 재계산 · F-07 AI 대응 안내</div>
                     </div>
                 </div>
-                <button class="btn-text" style="font-size:11px; border:1px solid #007aff; padding:3px 8px; border-radius:12px;" onclick="apiTrigger('기상청 실시간 예보조회 API')">☁️ 예보 50mm</button>
+                <button class="btn-text" style="font-size:11px; border:1px solid #007aff; padding:3px 8px; border-radius:12px;" onclick="showCustomModal('기상청 실시간 예보', '현재 관측된 실시간 레이더 강우 집계량(50mm/h)이 시뮬레이터에 연동되었습니다.')">☁️ 예보 50mm</button>
             </header>
 
             <main class="scroll-content">
@@ -169,7 +169,7 @@
 
                 <div class="section-title-container" style="margin-top:0;">
                     <div class="section-title">AI 맞춤 대응 안내 (F-07)</div>
-                    <div style="font-size:11px; color:#9ca3af; display:flex; align-items:center; gap:4px;">지형 조건 기준 <button style="background:none; border:1px solid #ccc; padding:2px 6px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="apiTrigger('대응 가이드 LLM 실시간 재생성 API')">🔄 재생성</button></div>
+                    <div style="font-size:11px; color:#9ca3af; display:flex; align-items:center; gap:4px;">지형 조건 기준 <button style="background:none; border:1px solid #ccc; padding:2px 6px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="showCustomModal('LLM 가이드 재생성', '실시간 지형 상황 모니터링 분석에 기반한 가이드라인을 최신 상태로 갱신 완료했습니다.')">🔄 재생성</button></div>
                 </div>
 
                 <div class="action-box yellow">
@@ -196,6 +196,14 @@
             <button class="act-btn red-text" id="nav-btn-view2" onclick="switchView('view2')">📊<br>위험 리포트</button>
             <button class="act-btn green-text" id="nav-btn-view3" onclick="switchView('view3')">⛈️<br>시나리오 대응</button>
         </footer>
+
+        <div class="custom-modal-backdrop" id="custom-modal">
+            <div class="custom-modal-window">
+                <div class="modal-header" id="modal-title">시스템 안내</div>
+                <div class="modal-body" id="modal-msg">처리가 성공적으로 완료되었습니다.</div>
+                <button class="modal-btn-close" onclick="hideCustomModal()">확인</button>
+            </div>
+        </div>
 
     </div>
 
