@@ -602,7 +602,7 @@ function renderShelters(riskLevel, shelters) {
 
     withDistance.forEach(s => {
         const marker = L.marker([s.lat, s.lng], {
-            icon: L.divIcon({ className: '', html: '<div style="background:#16a34a;color:#fff;font-size:10px;font-weight:bold;padding:3px 6px;border-radius:6px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25);">대피소</div>' })
+            icon: L.divIcon({ className: 'custom-shelter-icon', html: '<div>대피소</div>' })
         }).addTo(appState.mapInstance).bindPopup(`${s.name} (${s.distance_m}m)`);
         appState.shelterMarkers.push(marker);
     });
@@ -765,9 +765,36 @@ function syncSliderPresetActive(val) {
     if (matchEl) matchEl.classList.add('active');
 }
 
-function setSlider(val) {
-    document.getElementById('rain-slider').value = val;
-    updateRainScenario(val);
+/**
+ * 하단 프리셋 버튼 클릭 시 강수량이 순간 대입되어 끊겨 보이지 않고
+ * 부드러운 사인 Ease-out 감속 스무딩 효과와 함께 지정 수치까지 충전되도록 수정한 함수입니다.
+ */
+function setSlider(targetVal) {
+    const slider = document.getElementById('rain-slider');
+    if (!slider) return;
+
+    const startVal = parseFloat(slider.value);
+    const endVal = parseFloat(targetVal);
+    if (startVal === endVal) return;
+
+    const duration = 240; // 트랙을 따라 미끄러지듯 이동하는 시간 (240ms)
+    const startTime = performance.now();
+
+    function animateSlider(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        const easeProgress = Math.sin((progress * Math.PI) / 2);
+        const currentVal = startVal + (endVal - startVal) * easeProgress;
+
+        slider.value = Math.round(currentVal);
+        updateRainScenario(slider.value);
+
+        if (progress < 1) {
+            requestAnimationFrame(animateSlider);
+        }
+    }
+    requestAnimationFrame(animateSlider);
 }
 
 /**
