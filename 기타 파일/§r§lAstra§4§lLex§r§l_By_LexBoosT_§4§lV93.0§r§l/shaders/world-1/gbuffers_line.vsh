@@ -1,7 +1,0 @@
-#version 130
-
-#define NETHER
-#define VERTEX
-#define GBUFFERS_LINE
-
-#include "/program/gbuffers_basic.glsl"
