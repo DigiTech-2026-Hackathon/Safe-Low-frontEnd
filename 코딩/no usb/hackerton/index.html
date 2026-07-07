@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>침수 위험 모니터링 시스템</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,122 +15,109 @@
             <div class="top-sticky-area">
                 <div class="search-container">
                     <div class="search-bar">
-                        <span>🔍</span>
-                        <input type="text" id="map-search-input" placeholder="도로명·지번 주소 입력..." value="서울 관악구 신림동 1234-5">
+                        <input type="text" id="map-search-input" placeholder="주소 또는 건물명 입력... (예: 신림, 강남, 홍대, 독도)">
                     </div>
-                    <button class="btn-pin" onclick="handleSearch()">📍</button>
+                    <button class="btn-pin" onclick="handleSearch()">검색</button>
                 </div>
-                <div class="alert-banner">🚨 호우경보 · 대피소 활성화</div>
+                <div class="alert-banner" id="weather-alert-banner" style="display: none;">호우경보 활성화</div>
             </div>
 
-            <div class="map-area" id="map-canvas">
-                <div class="map-legend">
-                    <div class="legend-item"><span class="legend-color" style="background:#ef4444;"></span>위험</div>
-                    <div class="legend-item"><span class="legend-color" style="background:#f59e0b;"></span>경고</div>
-                    <div class="legend-item"><span class="legend-color" style="background:#10b981;"></span>주의</div>
-                    <div class="legend-item"><span class="legend-color" style="background:#34d399;"></span>안전</div>
-                    <div class="legend-item"><span class="legend-color" style="background:#9ca3af;"></span>불가</div>
-                    <div class="legend-item"><span class="legend-rect" style="background:#10b981;"></span>대피소</div>
-                </div>
-
-                <div class="map-controls">
-                    <button class="btn-ctrl" onclick="zoomMap(1)">+</button>
-                    <button class="btn-ctrl" onclick="zoomMap(-1)">-</button>
-                    <button class="btn-ctrl" onclick="resetMapLocation()">🧭</button>
-                </div>
-
-                <div class="map-overlay-circle" id="user-house-marker" style="top:45%; left:35%; width:100px; height:100px; background:rgba(239,68,68,0.25);">
-                    <div class="map-marker-center"></div>
-                    <div class="map-marker-label" id="map-marker-txt">우리 집 <span style="color:#93c5fd;">· 72점</span></div>
-                </div>
-
-                <div class="map-overlay-circle" style="top:35%; left:65%; width:70px; height:70px; background:rgba(245,158,11,0.25);">
-                    <div style="position:absolute; top:-12px; left:0; background:#10b981; color:white; padding:1px; font-size:10px; border-radius:2px;">+</div>
-                    <div style="border: 2px dashed #f59e0b; width:100%; height:100%; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:bold; color:#333;">탭</div>
-                    <div class="map-marker-label" style="background:#111827; color:#f59e0b; top:65%;">→ S-02</div>
-                </div>
-            </div>
+            <div class="map-area" id="map-canvas"></div>
 
             <div class="bottom-sheet">
                 <div class="sheet-handle"></div>
                 <div class="sheet-header">
-                    <h3>관심 위치</h3>
-                    <button class="btn-add" onclick="addNewLocation()">+ 추가</button>
+                    <h3 id="sheet-title-addr">위치 선택 대기 중</h3>
                 </div>
-                <div id="api-location-list"></div>
+                <div class="sheet-body-info">
+                    <p style="font-size: 13px; color: #666; margin-bottom: 10px;">위 주소의 실시간 침수 위험도를 분석하려면 아래 버튼을 누르세요.</p>
+                    <button class="btn-primary-action" onclick="switchView('view2')">위험 리포트 상세보기</button>
+                </div>
             </div>
         </div>
 
         <div id="view2" class="view-container">
             <header class="app-header">
                 <div class="header-left">
-                    <span class="back-arrow" onclick="switchView('view1')">←</span>
+                    <span class="back-arrow" onclick="switchView('view1')">이전</span>
                     <div>
                         <div style="font-size:16px; font-weight:bold;">위험 리포트</div>
-                        <div class="header-subtitle" id="api-report-addr">서울 관악구 신림동 1234-5 · 반지하</div>
+                        <div class="header-subtitle" id="api-report-addr">조회된 위치가 없습니다.</div>
                     </div>
                 </div>
-                <button class="btn-text" onclick="showCustomModal('공유하기', '현재 위치의 위험 리포트 링크가 클립보드에 복사되었습니다.')">공유</button>
+                <button class="btn-text" onclick="showCustomModal('공유하기', '현재 위치의 위험 리포트 링크가 복사되었습니다.')">공유</button>
             </header>
 
             <main class="scroll-content">
-                <div class="report-card">
-                    <div style="font-size:11px; color:#94a3b8; margin-bottom:4px;">AI 종합 침수 위험 스코어</div>
-                    <div class="score-flex">
-                        <div>
-                            <div class="huge-score" id="api-report-score">72</div>
-                            <div style="font-size:14px; font-weight:bold; color:#ef4444; margin-top:4px;" id="api-report-grade">고위험</div>
+                <div id="error-no-data" class="error-card" style="display: none;">
+                    <div class="error-icon">주의</div>
+                    <h4>분석 데이터가 없습니다</h4>
+                    <p>해당 지역은 침수 분석 정보가 수집되지 않는 구역입니다. 다른 주소를 검색해 주세요.</p>
+                </div>
+
+                <div id="report-main-content">
+                    <div class="report-card">
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:4px;">AI 종합 침수 위험 스코어</div>
+                        <div class="score-flex">
+                            <div>
+                                <div class="huge-score" id="api-report-score">-</div>
+                                <div style="font-size:14px; font-weight:bold; color:#9ca3af; margin-top:4px;" id="api-report-grade">대기 중</div>
+                            </div>
+                            <div class="gauge-container">
+                                <div class="gauge-track"></div>
+                                <div class="gauge-bar" id="api-gauge-bar"></div>
+                            </div>
                         </div>
-                        <div class="gauge-container">
-                            <div class="gauge-track"></div>
-                            <div class="gauge-bar" id="api-gauge-bar"></div>
+
+                        <div class="risk-phase-wrapper">
+                            <div class="phase-bar-container">
+                                <div class="phase-chunk chunk-safe">안전</div>
+                                <div class="phase-chunk chunk-watch">주의</div>
+                                <div class="phase-chunk chunk-warn">경고</div>
+                                <div class="phase-chunk chunk-danger">위험</div>
+                            </div>
+                        </div>
+                        
+                        <div class="ai-summary-box">
+                            <div style="font-size:11px; color:#38bdf8; font-weight:bold; margin-bottom:4px;">AI 한줄 요약 (F-03)</div>
+                            <div style="font-size:12px; color:#e2e8f0; line-height:1.4;" id="api-report-summary">분석 대기 중...</div>
                         </div>
                     </div>
-                    
-                    <div class="tag-row" id="api-tag-row">
-                        <div class="status-tag" id="tag-safe">안전</div>
-                        <div class="status-tag" id="tag-watch">주의</div>
-                        <div class="status-tag" id="tag-warn">경고</div>
-                        <div class="status-tag" id="tag-danger">고위험</div>
-                        <div class="status-tag" id="tag-severe">심각</div>
+
+                    <div class="section-title-container">
+                        <div class="section-title">위험 요인 분석 (F-06)</div>
                     </div>
+                    <div id="api-factor-list">
+                        </div>
 
-                    <div class="ai-summary-box">
-                        <div style="font-size:11px; color:#38bdf8; font-weight:bold; margin-bottom:4px;">🤖 AI 한줄 요약</div>
-                        <div style="font-size:12px; color:#e2e8f0; line-height:1.4;" id="api-report-summary">데이터 계산 중...</div>
+                    <div class="section-title-container">
+                        <div class="section-title">AI 종합 설명</div>
                     </div>
-                </div>
-
-                <div class="section-title-container">
-                    <div class="section-title">위험 요인 분석 (F-06)</div>
-                    <div style="font-size:11px; color:#007aff; cursor:pointer;" onclick="showCustomModal('LLM 정밀 분해', '심층 분석 엔진 가동: 지형 구조 및 하수 역류 계수를 실시간 분해하고 있습니다.')">LLM 분해</div>
-                </div>
-
-                <div style="background:white; border-radius:12px; padding:14px; border:1px solid #e5e7eb; margin-bottom:14px;">
-                    <div style="font-size:11px; color:#666; margin-bottom:8px;">요인별 기여도 (합계 100%)</div>
-                    <div class="contrib-bar" id="api-contrib-bar"></div>
-                    <div class="contrib-labels">
-                        <div><span class="contrib-dot" style="background:#ef4444;"></span>반지하 구조</div>
-                        <div><span class="contrib-dot" style="background:#f59e0b;"></span>저지대 위치</div>
-                        <div><span class="contrib-dot" style="background:#3b82f6;"></span>배수 밀도</div>
-                        <div><span class="contrib-dot" style="background:#10b981;"></span>침수 이력</div>
+                    <div class="ai-full-desc-box">
+                        <h4 style="font-size: 14px; color: #1e293b; margin-bottom: 6px;">"왜 위험한가?" 심층 근거 분석</h4>
+                        
+                        <div id="llm-retry-box" style="display: none; padding: 10px 0; text-align: center;">
+                            <p style="font-size: 12px; color: #ef4444; margin-bottom: 8px;">요약 데이터 원격 생성에 실패했습니다.</p>
+                            <button class="btn-retry" onclick="retryLLMGeneration()">설명 다시 불러오기</button>
+                        </div>
+                        
+                        <p class="desc-paragraph" id="api-llm-full-paragraph">주소를 검색하면 자연어 문단 분석 리포트가 완성됩니다.</p>
+                        
+                        <button class="cta-move-btn" onclick="switchView('view3')">대응 시나리오 적용해보기</button>
                     </div>
                 </div>
-
-                <div id="api-factor-list"></div>
             </main>
         </div>
 
         <div id="view3" class="view-container">
             <header class="app-header">
                 <div class="header-left">
-                    <span class="back-arrow" onclick="switchView('view2')">←</span>
+                    <span class="back-arrow" onclick="switchView('view2')">이전</span>
                     <div>
                         <div style="font-size:16px; font-weight:bold;">강우 시나리오 & 대응</div>
-                        <div class="header-subtitle">F-04 재계산 · F-07 AI 대응 안내</div>
+                        <div class="header-subtitle">F-04 재계산 및 F-07 AI 대응 안내</div>
                     </div>
                 </div>
-                <button class="btn-text" style="font-size:11px; border:1px solid #007aff; padding:3px 8px; border-radius:12px;" onclick="showCustomModal('기상청 실시간 예보', '현재 관측된 실시간 레이더 강우 집계량(50mm/h)이 시뮬레이터에 연동되었습니다.')">☁️ 예보 50mm</button>
             </header>
 
             <main class="scroll-content">
@@ -149,64 +137,44 @@
 
                 <div class="recalc-card">
                     <div>
-                        <div style="font-size:11px; color:#94a3b8; margin-bottom:4px;"><span id="api-recalc-label">50mm/h</span> 기준 재계산</div>
+                        <div style="font-size:11px; color:#94a3b8; margin-bottom:4px;"><span id="api-recalc-label">50mm/h</span> 기준 실시간 재계산</div>
                         <div style="display:flex; align-items:baseline; gap:6px;">
-                            <span style="font-size:32px; font-weight:bold; color:#ef4444;" id="api-recalc-score">57</span>
-                            <span style="font-size:14px; color:#ef4444; font-weight:bold;" id="api-recalc-grade">고위험</span>
-                        </div>
-                    </div>
-                    <div>
-                        <div style="font-size:10px; color:#94a3b8; text-align:right; margin-bottom:4px;">강우↑ 스코어↑</div>
-                        <div class="mini-chart">
-                            <div class="chart-bar fill" style="height:10px;"></div>
-                            <div class="chart-bar fill" style="height:18px;"></div>
-                            <div class="chart-bar fill" style="height:24px;"></div>
-                            <div class="chart-bar fill" style="height:30px;"></div>
-                            <div class="chart-bar" style="height:30px;"></div>
+                            <span style="font-size:32px; font-weight:bold; color:#fff;" id="api-recalc-score">-</span>
+                            <span style="font-size:14px; color:#9ca3af; font-weight:bold;" id="api-recalc-grade">대기 중</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="section-title-container" style="margin-top:0;">
                     <div class="section-title">AI 맞춤 대응 안내 (F-07)</div>
-                    <div style="font-size:11px; color:#9ca3af; display:flex; align-items:center; gap:4px;">지형 조건 기준 <button style="background:none; border:1px solid #ccc; padding:2px 6px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="showCustomModal('LLM 가이드 재생성', '실시간 지형 상황 모니터링 분석에 기반한 가이드라인을 최신 상태로 갱신 완료했습니다.')">🔄 재생성</button></div>
                 </div>
 
                 <div class="action-box yellow">
-                    <div class="action-title" style="color: #b45309;">● 지금 당장 (사전 대비)</div>
-                    <div class="action-list">
-                        <div class="action-item"><span class="num-badge">1</span>중요 서류·귀중품을 높은 곳으로 이동</div>
-                        <div class="action-item"><span class="num-badge">2</span>전기 차단기 위치 확인 및 가스 밸브 잠금</div>
-                        <div class="action-item"><span class="num-badge">3</span>비상용 물·식량 준비 (최소 3일치)</div>
-                    </div>
-                </div>
-
-                <div class="action-box pink">
-                    <div class="action-title" style="color: #dc2626;">● 호우주의보 발령 시</div>
-                    <div class="action-list">
-                        <div class="action-item"><span class="num-badge">1</span>창문·출입구 모래주머니 및 차수판 확인</div>
-                        <div class="action-item"><span class="num-badge">2</span>지하주차장 차량 즉시 이동</div>
+                    <div class="action-title" style="color: #b45309;">침수 방지 행동 지침</div>
+                    <div class="action-list" id="api-guide-list">
+                        <div style="font-size:12px; color:#666;">리포트가 생성되면 가이드가 동적 출력됩니다.</div>
                     </div>
                 </div>
             </main>
         </div>
 
         <footer class="bottom-actions">
-            <button class="act-btn blue-text" id="nav-btn-view1" onclick="switchView('view1')">🧭<br>위치 지도</button>
-            <button class="act-btn red-text" id="nav-btn-view2" onclick="switchView('view2')">📊<br>위험 리포트</button>
-            <button class="act-btn green-text" id="nav-btn-view3" onclick="switchView('view3')">⛈️<br>시나리오 대응</button>
+            <button class="act-btn blue-text active" id="nav-btn-view1" onclick="switchView('view1')">위치 지도</button>
+            <button class="act-btn red-text" id="nav-btn-view2" onclick="switchView('view2')">위험 리포트</button>
+            <button class="act-btn green-text" id="nav-btn-view3" onclick="switchView('view3')">시나리오 대응</button>
         </footer>
 
         <div class="custom-modal-backdrop" id="custom-modal">
             <div class="custom-modal-window">
                 <div class="modal-header" id="modal-title">시스템 안내</div>
-                <div class="modal-body" id="modal-msg">처리가 성공적으로 완료되었습니다.</div>
+                <div class="modal-body" id="modal-msg">안내 문구</div>
                 <button class="modal-btn-close" onclick="hideCustomModal()">확인</button>
             </div>
         </div>
 
     </div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
