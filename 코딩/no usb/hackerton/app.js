@@ -264,7 +264,8 @@ function loadReportApi() {
     }
 
     document.getElementById('api-report-addr').innerText = appState.currentAddress;
-    document.getElementById('api-report-score').innerText = computedScore;
+    const reportScoreEl = document.getElementById('api-report-score');
+    setTextWithPulse(reportScoreEl, computedScore);
 
     const gradeEl = document.getElementById('api-report-grade');
     gradeEl.innerText = computedLevel;
@@ -293,7 +294,8 @@ function loadReportApi() {
         paragraphEl.innerText = data.fullDesc;
     }
 
-    document.getElementById('api-recalc-score').innerText = computedScore;
+    const recalcScoreEl = document.getElementById('api-recalc-score');
+    setTextWithPulse(recalcScoreEl, computedScore);
     const recalcGrade = document.getElementById('api-recalc-grade');
     recalcGrade.innerText = computedLevel;
     recalcGrade.style.color = getRiskColor(computedLevel);
@@ -350,26 +352,150 @@ function retryLLMGeneration() {
 }
 
 function loadResponseGuideApi() {
-    const container = document.getElementById('api-guide-list');
-    let currentScore = Number(document.getElementById('api-report-score').innerText) || 50;
-
-    let steps = [
-        "지하 진입로 인근 물막이판 지지 구조대를 결속하십시오.",
-        "인근 침수 우려 배수 홈통 주변 잔해물을 신속히 수거하세요."
-    ];
-
-    if (currentScore >= 75) {
-        steps.push("현재 수위 상승 징후가 현저하오니 가차 없이 대피 경로를 타고 고지대로 탈출하십시오.");
-    } else {
-        steps.push("안내 방송 인프라 소통 경로를 개방한 채 안전 기상 예보 추이를 상시 대기 관측하세요.");
+    const data = mockAddressEngine[appState.currentPattern];
+    if (!data.isValidRegion) {
+        renderChecklist('api-guide-list-prep', []);
+        document.getElementById('api-guide-list-prep').innerHTML =
+            '<div style="font-size:12px; color:#94a3b8;">분석 데이터가 없는 지역입니다. 위험 리포트에서 다른 주소를 검색해 주세요.</div>';
+        document.getElementById('evac-guide-box').style.display = 'none';
+        document.getElementById('delta-badge').style.display = 'none';
+        const chip = document.getElementById('tier-chip');
+        if (chip) { chip.innerText = '-'; chip.style.color = '#94a3b8'; chip.style.borderColor = '#94a3b8'; }
+        return;
     }
 
-    container.innerHTML = steps.map((text, idx) => `
-        <div class="action-item">
+    const currentScore = Number(document.getElementById('api-report-score').innerText) || data.score;
+
+    // 평상시(50mm/h) 기준 스코어 대비 변화량을 배지로 표시
+    const baselineScore = data.score;
+    const delta = currentScore - baselineScore;
+    const deltaEl = document.getElementById('delta-badge');
+    if (deltaEl) {
+        if (delta === 0) {
+            deltaEl.style.display = 'none';
+        } else {
+            deltaEl.style.display = 'inline-flex';
+            deltaEl.style.color = delta > 0 ? '#fca5a5' : '#86efac';
+            deltaEl.innerText = delta > 0
+                ? `▲ 평상시(50mm/h) 대비 ${delta}점 상승`
+                : `▼ 평상시(50mm/h) 대비 ${Math.abs(delta)}점 감소`;
+        }
+    }
+
+    // 기여도가 가장 큰 위험 요인을 근거로 사전 대비 항목을 지역 맞춤형으로 구성
+    const topFactor = [...data.factors].sort((a, b) => b.percent - a.percent)[0];
+    const tier = getRainTier(appState.currentRainfall);
+
+    // 강우 구간 칩 갱신 (드래그 시 실시간으로 바뀌는지 눈으로 바로 확인 가능)
+    const chipEl = document.getElementById('tier-chip');
+    if (chipEl) {
+        chipEl.innerText = `${tier.label} · ${appState.currentRainfall}mm/h`;
+        chipEl.style.color = tier.color;
+        chipEl.style.borderColor = tier.color;
+    }
+
+    const prepStepsByTier = {
+        calm: [
+            `${topFactor.name} 취약 지점을 미리 파악해 두고, 물막이판·모래주머니 보관 위치를 확인하세요.`,
+            "배수구·집수정 주변을 정기적으로 점검해 평소 배수 경로를 막힘 없이 유지하세요.",
+            "가족과 대피소 위치, 비상연락 방법을 미리 공유해 두세요."
+        ],
+        watch: [
+            `${topFactor.name} 특성상 취약한 출입구·창문 하단에 물막이판을 설치할 준비를 하세요.`,
+            "배수구 주변 낙엽·쓰레기를 지금 제거하고 역류방지기 작동 상태를 점검하세요.",
+            "휴대전화 보조배터리, 손전등 등 비상용품을 충전해 두세요."
+        ],
+        warn: [
+            `${topFactor.name} 취약 지점에 물막이판과 모래주머니를 지금 바로 설치하세요.`,
+            "중요 서류, 가전제품, 귀중품을 높은 곳으로 옮기세요.",
+            "차량은 침수 우려가 없는 고지대로 미리 이동해 두세요.",
+            "외출을 자제하고 이후 강우 예보와 특보 발령 여부를 계속 확인하세요."
+        ],
+        extreme: [
+            "가전제품 전원을 차단하고 콘센트·멀티탭이 물에 닿지 않도록 조치하세요.",
+            "반지하·1층 거주자는 언제든 즉시 이동할 수 있는 상태를 유지하세요.",
+            "외출을 금지하고 창문·문틈으로 물이 새는지 수시로 확인하세요.",
+            "이웃 중 거동이 불편한 고령자·장애인이 있다면 상황을 미리 확인해 주세요."
+        ]
+    };
+
+    const evacStepsByTier = {
+        calm: [],
+        watch: [
+            "호우특보 발령 여부를 수시로 확인하고, 우리 집에서 대피소까지 이동 경로를 미리 파악해 두세요."
+        ],
+        warn: [
+            "실내 수위가 발목 높이 이상으로 상승하면 전기 차단기를 내리고 즉시 밖으로 이동하세요.",
+            "이동 시 맨홀·배수구 위치를 피하고, 막대 등으로 바닥을 확인하며 이동하세요."
+        ],
+        extreme: [
+            "더 기다리지 말고 즉시 지정 대피소로 이동하세요.",
+            "이동이 어렵다면 건물의 가장 높은 층으로 올라가 119·재난안전본부에 구조를 요청하세요.",
+            "호우 경보 발효 중에는 하천 변, 지하차도, 지하주차장 근처에 절대 접근하지 마세요."
+        ]
+    };
+
+    renderChecklist('api-guide-list-prep', prepStepsByTier[tier.key]);
+
+    const evacBox = document.getElementById('evac-guide-box');
+    // '경고' 단계 이상이거나 강우 구간이 경보 이상이면 대피 판단 가이드 노출
+    if (currentScore >= 51 || tier.key === 'warn' || tier.key === 'extreme') {
+        evacBox.style.display = 'block';
+        renderChecklist('api-guide-list-evac', evacStepsByTier[tier.key].length ? evacStepsByTier[tier.key] : evacStepsByTier.watch);
+    } else {
+        evacBox.style.display = 'none';
+    }
+
+    const updatedEl = document.getElementById('guide-updated-at');
+    if (updatedEl) {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        updatedEl.innerText = `업데이트 ${hh}:${mm}`;
+    }
+}
+
+/**
+ * 강우량(mm/h)에 따라 평상시/주의보/경보/극한호우 4단계 구간을 판정한다.
+ * 프리셋 버튼(10/50/80/110mm)과 동일한 경계값을 사용한다.
+ */
+function getRainTier(rainfall) {
+    if (rainfall <= 20) return { key: 'calm', label: '평상시', color: '#10b981' };
+    if (rainfall <= 60) return { key: 'watch', label: '주의보', color: '#f59e0b' };
+    if (rainfall <= 90) return { key: 'warn', label: '경보', color: '#f97316' };
+    return { key: 'extreme', label: '극한호우', color: '#ef4444' };
+}
+
+/**
+ * 체크박스가 있는 대응 안내 리스트를 렌더링한다.
+ * 체크 시 취소선으로 완료 표시만 하며(서버 저장 없음), 화면을 벗어나면 초기화된다.
+ */
+function renderChecklist(containerId, items) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!items || items.length === 0) {
+        container.innerHTML = '<div style="font-size:12px; color:#94a3b8;">현재 강우 구간에서는 해당 없음.</div>';
+        return;
+    }
+
+    container.innerHTML = items.map((text, idx) => `
+        <label class="checklist-item">
+            <input type="checkbox" onchange="this.parentElement.classList.toggle('done', this.checked)">
             <span class="num-badge">${idx + 1}</span>
-            ${text}
-        </div>
+            <span class="check-text">${text}</span>
+        </label>
     `).join('');
+}
+
+function retryResponseGuide() {
+    showCustomModal('AI 재생성', '현재 위험 단계와 강우 시나리오를 반영해 대응 안내를 다시 생성했습니다.');
+    loadResponseGuideApi();
+}
+
+function goToShelterTab() {
+    switchView('view1');
+    setSheetTab('shelter');
 }
 
 function renderWeatherBanner(warningLevel) {
@@ -614,18 +740,49 @@ function setSheetTab(tab) {
     if (tab === 'fav') renderFavorites();
 }
 
+let rainDebounceTimer = null;
+
 function updateRainScenario(val) {
-    appState.currentRainfall = Number(val);
-    document.getElementById('slider-val-display').innerText = val + ' mm/h';
-    document.getElementById('api-recalc-label').innerText = val + 'mm/h';
-    loadReportApi();
+    const num = Number(val);
+    appState.currentRainfall = num;
+
+    // 슬라이더 라벨은 드래그 중에도 끊김 없이 즉시 갱신
+    document.getElementById('slider-val-display').innerText = num + ' mm/h';
+    document.getElementById('api-recalc-label').innerText = num + 'mm/h';
+    syncSliderPresetActive(num);
+
+    // 점수·지도·체크리스트 재계산은 짧게 묶어서(디바운스) 처리해 드래그 중 버벅임을 줄임
+    clearTimeout(rainDebounceTimer);
+    rainDebounceTimer = setTimeout(() => {
+        loadReportApi();
+        loadResponseGuideApi();
+    }, 50);
+}
+
+function syncSliderPresetActive(val) {
+    document.querySelectorAll('.btn-segments .btn-seg').forEach(b => b.classList.remove('active'));
+    const matchEl = document.getElementById(`seg-${val}`);
+    if (matchEl) matchEl.classList.add('active');
 }
 
 function setSlider(val) {
     document.getElementById('rain-slider').value = val;
-    document.querySelectorAll('.btn-segments .btn-seg').forEach(b => b.classList.remove('active'));
-    document.getElementById(`seg-${val}`).classList.add('active');
     updateRainScenario(val);
+}
+
+/**
+ * 값이 실제로 바뀔 때만 짧은 펄스 애니메이션과 함께 텍스트를 갱신한다.
+ * (매번 재생하면 슬라이더 드래그 중 오히려 어지러워 보이므로 변경 시에만 적용)
+ */
+function setTextWithPulse(el, newValue) {
+    if (!el) return;
+    const changed = el.innerText !== String(newValue);
+    el.innerText = newValue;
+    if (changed) {
+        el.classList.remove('score-pulse');
+        void el.offsetWidth; // 리플로우를 강제해 애니메이션을 재시작
+        el.classList.add('score-pulse');
+    }
 }
 
 function getRiskColor(level) {
@@ -643,7 +800,7 @@ function switchView(viewId) {
     document.getElementById(`nav-btn-${viewId}`).classList.add('active');
 
     if (viewId === 'view2') loadReportApi();
-    if (viewId === 'view3') loadResponseGuideApi();
+    if (viewId === 'view3') { loadReportApi(); loadResponseGuideApi(); }
 }
 
 window.onload = () => {
