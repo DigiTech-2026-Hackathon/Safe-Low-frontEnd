@@ -1,18 +1,24 @@
 // 백엔드 주소 (실제 서버 구축 후 이 URL을 변경하세요)
 const BASE_URL = 'http://localhost:8080/api';
 
+const FAV_STORAGE_KEY = 'flood_risk_favorites'; // F-11: 관심 위치는 서버 API 없이 localStorage에 저장
+
 const appState = {
-    currentLat: 37.4842, 
+    currentLat: 37.4842,
     currentLng: 126.9294,
     currentAddress: '서울 관악구 신림동 100',
     currentRainfall: 50,
+    currentPattern: '신림',
     mapInstance: null,
     mapMarker: null,
     mapCircle: null,
-    isLlmFailedMode: false 
+    shelterMarkers: [],
+    gridLayers: [],
+    isLlmFailedMode: false
 };
 
 // API와 데이터베이스가 연동되기 전까지 임시로 동작하는 Mock 데이터
+// (실제 연동 시 /api/risk-score, /api/response-guide 등의 응답으로 대체됩니다)
 const mockAddressEngine = {
     '신림': {
         isValidRegion: true,
@@ -26,6 +32,10 @@ const mockAddressEngine = {
             { name: '저지대 지형성', score: 82, percent: 35, desc: '도림천 합류 지점 하단 유출구 정체 시 하수 유입 수위가 비약적으로 증가합니다.' },
             { name: '배수밀도 역량', score: 60, percent: 15, desc: '단시간 처리 가능한 시간당 하수 관거 배출 인프라가 한계 용량에 근접했습니다.' },
             { name: '침수이력 데이터', score: 95, percent: 10, desc: '과거 대형 집중호우 피해 이력이 누적 3회 이상 기록된 요주의 관리 구역입니다.' }
+        ],
+        shelters: [
+            { name: '신림초등학교 체육관', address: '서울시 관악구 신림로 200', capacity: 500, lat: 37.4855, lng: 126.9301 },
+            { name: '관악구민회관', address: '서울시 관악구 관악로 145', capacity: 300, lat: 37.4781, lng: 126.9515 }
         ]
     },
     '강남': {
@@ -40,6 +50,9 @@ const mockAddressEngine = {
             { name: '저지대 지형성', score: 92, percent: 50, desc: '테헤란로 및 주변 고지대로부터 빗물이 급격히 유입되는 역 마름모형 저점입니다.' },
             { name: '배수밀도 역량', score: 70, percent: 30, desc: '반 배수 처리 역량은 갖추었으나 이물질 유입 시 순간 처리 효율이 급전직하합니다.' },
             { name: '침수이력 데이터', score: 80, percent: 15, desc: '연도별 기습 폭우 사태 시 차량 침수 등 재산 피해 이력이 다수 발견되었습니다.' }
+        ],
+        shelters: [
+            { name: '강남구민체육센터', address: '서울시 강남구 삼성로 200', capacity: 400, lat: 37.4989, lng: 127.0322 }
         ]
     },
     '홍대': {
@@ -54,10 +67,11 @@ const mockAddressEngine = {
             { name: '저지대 지형성', score: 35, percent: 20, desc: '경사 평탄화 분석 결과 지형적 집수 위험 요인은 상당히 낮은 축에 속합니다.' },
             { name: '배수밀도 역량', score: 65, percent: 45, desc: '가장 큰 비중을 차지하는 요인으로 이물질로 인한 일시적 노면 배수 정체가 우려됩니다.' },
             { name: '침수이력 데이터', score: 20, percent: 20, desc: '근래 대규모 침수 피해 및 가옥 파손 접수 이력은 경미한 수준입니다.' }
-        ]
+        ],
+        shelters: []
     },
     '독도': {
-        isValidRegion: false 
+        isValidRegion: false
     },
     'default': {
         isValidRegion: true,
@@ -71,7 +85,8 @@ const mockAddressEngine = {
             { name: '저지대 지형성', score: 10, percent: 10, desc: '자연 배수가 즉각 성립되는 평균 이상 고도의 우수한 경사 평면을 보유합니다.' },
             { name: '배수밀도 역량', score: 90, percent: 70, desc: '초당 입방미터급 배출이 보장되는 최신 빗물 저류조 인프라가 조밀하게 확보되었습니다.' },
             { name: '침수이력 데이터', score: 5, percent: 15, desc: '과거 방재 전산망 등록 이래로 범람 내역이 단 한 건도 감지되지 않았습니다.' }
-        ]
+        ],
+        shelters: []
     }
 };
 
@@ -91,13 +106,13 @@ function initRealMap() {
     }
 
     appState.mapInstance = L.map('map-canvas', { zoomControl: false }).setView([appState.currentLat, appState.currentLng], 15);
-    
+
     // 네이버 지도 스타일의 CartoDB Positron 오픈소스 타일 레이어
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OpenStreetMap'
     }).addTo(appState.mapInstance);
 
-    const targetColor = getRiskColor('위험'); 
+    const targetColor = getRiskColor('위험');
 
     appState.mapCircle = L.circle([appState.currentLat, appState.currentLng], {
         color: targetColor, fillColor: targetColor, fillOpacity: 0.2, radius: 150
@@ -107,6 +122,36 @@ function initRealMap() {
         .bindPopup(appState.currentAddress).openPopup();
 
     document.getElementById('sheet-title-addr').innerText = appState.currentAddress;
+
+    // F-10: 주변 영역 위험도 격자 오버레이 (분석불가 지역 포함)
+    renderRiskGrid();
+    updateFavToggleUI();
+}
+
+/**
+ * 진입 시 GPS 권한을 요청해 현재 위치로 이동을 시도한다 (S-01 명세).
+ * 실패/거부 시 기본 좌표(신림동)로 유지하고 주소 검색을 유도한다.
+ */
+function tryGeoLocate() {
+    if (!('geolocation' in navigator)) {
+        showCustomModal('위치 확인 불가', 'GPS를 지원하지 않는 환경입니다. 주소를 직접 검색해 주세요.');
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        (pos) => {
+            appState.currentLat = pos.coords.latitude;
+            appState.currentLng = pos.coords.longitude;
+            appState.currentAddress = '현재 위치';
+            appState.currentPattern = 'default';
+            initRealMap();
+        },
+        () => {
+            // 거부/실패 시: 기본 위치 유지, 주소 검색 유도
+            showCustomModal('위치 확인 불가', 'GPS 권한이 없어 기본 위치로 표시합니다. 상단 검색창에서 주소를 입력해 주세요.');
+        },
+        { timeout: 5000 }
+    );
 }
 
 /**
@@ -122,26 +167,28 @@ async function handleSearch() {
     const keyword = inputEl.value.trim();
 
     // =========================================================================
-    // 백엔드 API & DB 실제 연동 시 개발 가이드 가상 스니펫
-    // (백엔드가 완성되면 아래 주석 코드를 풀어서 변수를 바인딩하면 됩니다)
+    // 실제 백엔드 연동 시 사용할 코드 (API 명세서 기준: GET /api/geocode)
+    // 백엔드가 준비되면 아래 주석을 해제하고, 이후의 목업(mock) 매칭 로직은
+    // 제거하면 됩니다. 필드명은 API 명세서와 동일하게 맞춰져 있습니다.
     // =========================================================================
     /*
     try {
-        // 1. 검색어(건물명/주소)를 인코딩하여 데이터베이스에 분석 쿼리 요청
-        const response = await fetch(`${BASE_URL}/flood-risk?keyword=${encodeURIComponent(keyword)}&rainfall=${appState.currentRainfall}`);
+        const response = await fetch(`${BASE_URL}/geocode?address=${encodeURIComponent(keyword)}`);
         const result = await response.json();
-        
+
         if (result.success) {
-            // DB에서 가져온 실제 위경도 정보 적용
-            appState.currentLat = result.data.latitude;
-            appState.currentLng = result.data.longitude;
-            appState.currentAddress = result.data.addressName;
-            
-            // 데이터 매핑 및 지도 갱신 로직 실행...
+            appState.currentLat = result.data.lat;
+            appState.currentLng = result.data.lng;
+            appState.currentAddress = result.data.address_road;
+            // 좌표 확보 후 /api/risk-score 로 위험 스코어를 조회하는 로직이 이어집니다.
             return;
         }
+        showCustomModal('검색 실패', result.error?.message || '주소를 찾을 수 없습니다.');
+        return;
     } catch (error) {
-        console.error("백엔드 서버 통신 에러: ", error);
+        console.error('백엔드 서버 통신 에러: ', error);
+        showCustomModal('통신 오류', '서버와 통신할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+        return;
     }
     */
 
@@ -155,15 +202,17 @@ async function handleSearch() {
     else if (pattern === '강남') { appState.currentLat = 37.4979; appState.currentLng = 127.0276; }
     else if (pattern === '홍대') { appState.currentLat = 37.5565; appState.currentLng = 126.9239; }
     else if (pattern === '독도') { appState.currentLat = 37.2428; appState.currentLng = 131.8689; }
-    else { appState.currentLat = 37.5665; appState.currentLng = 126.9780; } 
+    else { appState.currentLat = 37.5665; appState.currentLng = 126.9780; }
 
     appState.currentAddress = keyword;
+    appState.currentPattern = pattern;
     document.getElementById('sheet-title-addr').innerText = keyword;
+    updateFavToggleUI();
 
     if (appState.mapInstance) {
         const nextTargetPos = [appState.currentLat, appState.currentLng];
         appState.mapInstance.setView(nextTargetPos, 16);
-        
+
         if (appState.mapMarker) {
             appState.mapMarker.setLatLng(nextTargetPos).bindPopup(keyword).openPopup();
         }
@@ -177,19 +226,16 @@ async function handleSearch() {
 
     const matchedData = mockAddressEngine[pattern];
     renderWeatherBanner(matchedData.warning);
+    renderRiskGrid();
+    renderShelters(matchedData.isValidRegion ? matchedData.level : null, matchedData.shelters || []);
 
     showCustomModal('위치 매핑 완료', `'${keyword}'로 지도 좌표 이동이 완료되었습니다.`);
 }
 
 function loadReportApi() {
-    let pattern = 'default';
-    if (appState.currentAddress.includes('신림')) pattern = '신림';
-    else if (appState.currentAddress.includes('강남')) pattern = '강남';
-    else if (appState.currentAddress.includes('홍대')) pattern = '홍대';
-    else if (appState.currentAddress.includes('독도')) pattern = '독도';
-
+    const pattern = appState.currentPattern;
     const data = mockAddressEngine[pattern];
-    
+
     const errorCard = document.getElementById('error-no-data');
     const mainContent = document.getElementById('report-main-content');
 
@@ -205,7 +251,7 @@ function loadReportApi() {
 
     let rainGap = appState.currentRainfall - 50;
     let computedScore = Math.min(100, Math.max(5, data.score + Math.floor(rainGap * 0.4)));
-    
+
     let computedLevel = '주의';
     if (computedScore <= 25) computedLevel = '안전';
     else if (computedScore <= 50) computedLevel = '주의';
@@ -219,7 +265,7 @@ function loadReportApi() {
 
     document.getElementById('api-report-addr').innerText = appState.currentAddress;
     document.getElementById('api-report-score').innerText = computedScore;
-    
+
     const gradeEl = document.getElementById('api-report-grade');
     gradeEl.innerText = computedLevel;
     gradeEl.style.color = getRiskColor(computedLevel);
@@ -241,7 +287,7 @@ function loadReportApi() {
 
     if (appState.isLlmFailedMode) {
         retryBox.style.display = 'block';
-        paragraphEl.innerText = ""; 
+        paragraphEl.innerText = "";
     } else {
         retryBox.style.display = 'none';
         paragraphEl.innerText = data.fullDesc;
@@ -251,6 +297,9 @@ function loadReportApi() {
     const recalcGrade = document.getElementById('api-recalc-grade');
     recalcGrade.innerText = computedLevel;
     recalcGrade.style.color = getRiskColor(computedLevel);
+
+    // F-09: 위험 단계가 '경고' 이상으로 재계산되면 대피소 안내도 함께 갱신
+    renderShelters(computedLevel, data.shelters || []);
 }
 
 function updatePhaseBarHighlight(currentLevel) {
@@ -275,7 +324,7 @@ function renderFourFactors(factors, rainGap) {
 
     listContainer.innerHTML = factors.map(f => {
         let adjustedScore = f.score;
-        if(f.name.includes('배수') || f.name.includes('지형')) {
+        if (f.name.includes('배수') || f.name.includes('지형')) {
             adjustedScore = Math.min(100, Math.max(0, f.score + Math.floor(rainGap * 0.2)));
         }
 
@@ -288,15 +337,15 @@ function renderFourFactors(factors, rainGap) {
                 <div class="factor-bar-bg">
                     <div class="factor-bar-fill" style="width: ${adjustedScore}%; background: ${getRiskColor(adjustedScore > 70 ? '위험' : adjustedScore > 40 ? '경고' : '안전')};"></div>
                 </div>
-                <div class="factor-desc"><strong>LLM 설명 (F-06):</strong> ${f.desc}</div>
+                <div class="factor-desc"><strong>AI 설명:</strong> ${f.desc}</div>
             </div>
         `;
     }).join('');
 }
 
 function retryLLMGeneration() {
-    appState.isLlmFailedMode = false; 
-    showCustomModal('LLM 통신 재시도', '언어 모델 요약을 백엔드 서버에 재요청합니다.');
+    appState.isLlmFailedMode = false;
+    showCustomModal('AI 재요청', 'AI 설명 생성을 서버에 다시 요청합니다.');
     loadReportApi();
 }
 
@@ -334,6 +383,237 @@ function renderWeatherBanner(warningLevel) {
     }
 }
 
+/**
+ * F-10: 결과 지도 뷰 - 현재 위치 주변을 3x3 격자로 나눠 위험도를 색상으로 표시.
+ * 실제 서비스에서는 GET /api/risk-map 의 cells 배열로 대체됩니다.
+ * 규칙 기반으로 사전 계산된 값을 사용하는 서버 사양(LLM 미호출)과 동일하게,
+ * 여기서도 좌표 기반 규칙만으로 등급을 정하고 임의로 1칸을 '분석불가'로 표시합니다.
+ */
+function renderRiskGrid() {
+    appState.gridLayers.forEach(layer => appState.mapInstance.removeLayer(layer));
+    appState.gridLayers = [];
+
+    const step = 0.006; // 격자 한 칸 크기(위경도)
+    const levels = ['안전', '주의', '경고', '위험'];
+    let cellIndex = 0;
+    const analysisGapRow = 1, analysisGapCol = 2; // 분석불가로 표시할 칸(데모용 고정 위치)
+
+    for (let row = -1; row <= 1; row++) {
+        for (let col = -1; col <= 1; col++) {
+            const isCurrentCell = (row === 0 && col === 0);
+            const cLat = appState.currentLat + row * step;
+            const cLng = appState.currentLng + col * step;
+
+            const bounds = [
+                [cLat - step / 2, cLng - step / 2],
+                [cLat + step / 2, cLng + step / 2]
+            ];
+
+            let level;
+            let isNoData = false;
+            if (row === analysisGapRow - 1 && col === analysisGapCol - 1) {
+                isNoData = true;
+            } else if (isCurrentCell) {
+                level = mockAddressEngine[appState.currentPattern].isValidRegion
+                    ? mockAddressEngine[appState.currentPattern].level : '안전';
+            } else {
+                // 중심에서 멀어질수록 위험도가 낮아지는 단순 규칙
+                const dist = Math.abs(row) + Math.abs(col);
+                level = levels[Math.max(0, 3 - dist)];
+            }
+
+            const rect = L.rectangle(bounds, isNoData
+                ? { color: '#64748b', weight: 1, fillColor: '#94a3b8', fillOpacity: 0.35, dashArray: '4,3' }
+                : { color: getRiskColor(level), weight: 1, fillColor: getRiskColor(level), fillOpacity: isCurrentCell ? 0.05 : 0.22 }
+            ).addTo(appState.mapInstance);
+
+            rect.bindPopup(isNoData ? '분석불가 지역: 데이터가 수집되지 않았습니다.' : `격자 위험도: ${level}`);
+            appState.gridLayers.push(rect);
+            cellIndex++;
+        }
+    }
+}
+
+/**
+ * F-09: 대피소 안내 - 위험 단계가 '경고'/'위험'일 때만 인근 대피소를 표시.
+ * 실제 서비스에서는 GET /api/shelters(distance_m 포함) 응답으로 대체됩니다.
+ */
+function renderShelters(riskLevel, shelters) {
+    appState.shelterMarkers.forEach(m => appState.mapInstance.removeLayer(m));
+    appState.shelterMarkers = [];
+
+    const listEl = document.getElementById('shelter-list');
+    const emptyEl = document.getElementById('shelter-empty-msg');
+    if (!listEl || !emptyEl) return;
+
+    const shouldShow = (riskLevel === '경고' || riskLevel === '위험') && shelters && shelters.length > 0;
+
+    if (!shouldShow) {
+        listEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        emptyEl.innerText = (riskLevel === '경고' || riskLevel === '위험')
+            ? '반경 내 지정 대피소 정보가 없습니다. 관할 행정복지센터로 문의해 주세요.'
+            : "현재 위험 단계가 '경고' 이상일 때 인근 대피소가 표시됩니다.";
+        return;
+    }
+
+    emptyEl.style.display = 'none';
+
+    const withDistance = shelters.map(s => ({
+        ...s,
+        distance_m: Math.round(haversineMeters(appState.currentLat, appState.currentLng, s.lat, s.lng))
+    })).sort((a, b) => a.distance_m - b.distance_m);
+
+    listEl.innerHTML = withDistance.map(s => `
+        <div class="shelter-card">
+            <div class="info">
+                <span class="name">${s.name}</span>
+                <span class="meta">${s.address} · 수용 ${s.capacity}명</span>
+            </div>
+            <span class="dist">${s.distance_m}m</span>
+        </div>
+    `).join('');
+
+    withDistance.forEach(s => {
+        const marker = L.marker([s.lat, s.lng], {
+            icon: L.divIcon({ className: '', html: '<div style="background:#16a34a;color:#fff;font-size:10px;font-weight:bold;padding:3px 6px;border-radius:6px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25);">대피소</div>' })
+        }).addTo(appState.mapInstance).bindPopup(`${s.name} (${s.distance_m}m)`);
+        appState.shelterMarkers.push(marker);
+    });
+}
+
+function haversineMeters(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const toRad = (v) => (v * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/* ===================== F-11: 관심 위치 저장·모니터링 (localStorage) ===================== */
+
+function getFavorites() {
+    try {
+        const raw = localStorage.getItem(FAV_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        console.error('관심 위치 데이터를 불러오지 못했습니다: ', e);
+        return [];
+    }
+}
+
+function saveFavorites(list) {
+    try {
+        localStorage.setItem(FAV_STORAGE_KEY, JSON.stringify(list));
+    } catch (e) {
+        console.error('관심 위치 데이터를 저장하지 못했습니다: ', e);
+    }
+}
+
+function isCurrentFavorite() {
+    return getFavorites().some(f => f.address === appState.currentAddress);
+}
+
+function toggleFavorite() {
+    const list = getFavorites();
+    const idx = list.findIndex(f => f.address === appState.currentAddress);
+
+    if (idx >= 0) {
+        list.splice(idx, 1);
+        showCustomModal('관심 위치 해제', `'${appState.currentAddress}'을(를) 관심 위치에서 제거했습니다.`);
+    } else {
+        list.push({
+            address: appState.currentAddress,
+            lat: appState.currentLat,
+            lng: appState.currentLng,
+            pattern: appState.currentPattern
+        });
+        showCustomModal('관심 위치 저장', `'${appState.currentAddress}'을(를) 관심 위치로 저장했습니다.`);
+    }
+
+    saveFavorites(list);
+    updateFavToggleUI();
+    renderFavorites();
+}
+
+function updateFavToggleUI() {
+    const btn = document.getElementById('btn-fav-toggle');
+    if (!btn) return;
+    if (isCurrentFavorite()) {
+        btn.innerText = '★ 저장됨';
+        btn.classList.add('active');
+    } else {
+        btn.innerText = '☆ 관심 위치 저장';
+        btn.classList.remove('active');
+    }
+}
+
+function renderFavorites() {
+    const listEl = document.getElementById('fav-list');
+    const emptyEl = document.getElementById('fav-empty-msg');
+    if (!listEl || !emptyEl) return;
+
+    const list = getFavorites();
+    if (list.length === 0) {
+        listEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        return;
+    }
+    emptyEl.style.display = 'none';
+
+    listEl.innerHTML = list.map((f, idx) => `
+        <div class="fav-card">
+            <div class="info">
+                <span class="name">${f.address}</span>
+                <span class="meta">저장된 관심 위치</span>
+            </div>
+            <div>
+                <button class="btn-fav-goto" onclick="goToFavorite(${idx})">조회</button>
+                <button class="btn-fav-remove" onclick="removeFavorite(${idx})">삭제</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function goToFavorite(idx) {
+    const list = getFavorites();
+    const fav = list[idx];
+    if (!fav) return;
+
+    appState.currentLat = fav.lat;
+    appState.currentLng = fav.lng;
+    appState.currentAddress = fav.address;
+    appState.currentPattern = fav.pattern;
+
+    document.getElementById('map-search-input').value = fav.address;
+    document.getElementById('sheet-title-addr').innerText = fav.address;
+    initRealMap();
+
+    const matchedData = mockAddressEngine[fav.pattern];
+    renderWeatherBanner(matchedData.warning);
+    renderShelters(matchedData.isValidRegion ? matchedData.level : null, matchedData.shelters || []);
+    setSheetTab('info');
+}
+
+function removeFavorite(idx) {
+    const list = getFavorites();
+    list.splice(idx, 1);
+    saveFavorites(list);
+    renderFavorites();
+    updateFavToggleUI();
+}
+
+function setSheetTab(tab) {
+    document.querySelectorAll('.sheet-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.sheet-pane').forEach(p => p.classList.remove('active'));
+
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    document.getElementById(`pane-${tab}`).classList.add('active');
+
+    if (tab === 'fav') renderFavorites();
+}
+
 function updateRainScenario(val) {
     appState.currentRainfall = Number(val);
     document.getElementById('slider-val-display').innerText = val + ' mm/h';
@@ -358,14 +638,18 @@ function getRiskColor(level) {
 function switchView(viewId) {
     document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.act-btn').forEach(b => b.classList.remove('active'));
-    
+
     document.getElementById(viewId).classList.add('active');
     document.getElementById(`nav-btn-${viewId}`).classList.add('active');
-    
+
     if (viewId === 'view2') loadReportApi();
     if (viewId === 'view3') loadResponseGuideApi();
 }
 
 window.onload = () => {
     initRealMap();
+    tryGeoLocate();
+    const initialData = mockAddressEngine[appState.currentPattern];
+    renderWeatherBanner(initialData.warning);
+    renderShelters(initialData.isValidRegion ? initialData.level : null, initialData.shelters || []);
 };
