@@ -1,14 +1,14 @@
-// 백엔드 주소 (실제 서버 구축 후 이 URL을 변경하세요)
-const BASE_URL = 'http://localhost:8080/api';
+// 백엔드 주소 (FastAPI 기본 포트 8000 또는 설정하신 포트로 맞추세요)
+const BASE_URL = 'http://localhost:8000/api';
 
-const FAV_STORAGE_KEY = 'flood_risk_favorites'; // F-11: 관심 위치는 서버 API 없이 localStorage에 저장
+const FAV_STORAGE_KEY = 'flood_risk_favorites'; 
 
 const appState = {
     currentLat: 37.4842,
     currentLng: 126.9294,
     currentAddress: '서울 관악구 신림동 100',
     currentRainfall: 50,
-    currentPattern: '신림',
+    currentLevel: '안전', // 실시간 위험 단계 저장용
     mapInstance: null,
     mapMarker: null,
     mapCircle: null,
@@ -17,78 +17,7 @@ const appState = {
     isLlmFailedMode: false
 };
 
-// API와 데이터베이스가 연동되기 전까지 임시로 동작하는 Mock 데이터
-const mockAddressEngine = {
-    '신림': {
-        isValidRegion: true,
-        score: 85,
-        level: '위험',
-        warning: '호우경보',
-        summary: '반지하 밀집 구역 및 저지대 특성이 겹쳐 집중 강우 시 역류 유입 가능성이 매우 높은 상태입니다.',
-        fullDesc: '해당 권역은 누적 점수 85점으로 심각한 위기 상태를 대변하고 있습니다. 지형 계수 조사 결과 주변 지대 대비 약 3m 하강한 저지대 스포크 선상에 위치하고 있으며, 지하 가옥 분배 밀도가 42%에 육박하여 우수 집중 시 최우선 역류 피해가 발생할 수 있는 명확한 근거를 지니고 있습니다.',
-        factors: [
-            { type: 'subway', name: '반지하 가구수', score: 90, percent: 40, desc: '반지하 주거 비율이 관악구 평균 대비 매우 높아 진입 유입에 극도로 취약합니다.' },
-            { type: 'terrain', name: '저지대 지형성', score: 82, percent: 35, desc: '도림천 합류 지점 하단 유출구 정체 시 하수 유입 수위가 비약적으로 증가합니다.' },
-            { type: 'drainage', name: '배수밀도 역량', score: 60, percent: 15, desc: '단시간 처리 가능한 시간당 하수 관거 배출 인프라가 한계 용량에 근접했습니다.' },
-            { type: 'history', name: '침수이력 데이터', score: 95, percent: 10, desc: '과거 대형 집중호우 피해 이력이 누적 3회 이상 기록된 요주의 관리 구역입니다.' }
-        ],
-        shelters: [
-            { name: '신림초등학교 체육관', address: '서울시 관악구 신림로 200', capacity: 500, lat: 37.4855, lng: 126.9301 },
-            { name: '관악구민회관', address: '서울시 관악구 관악로 145', capacity: 300, lat: 37.4781, lng: 126.9515 }
-        ]
-    },
-    '강남': {
-        isValidRegion: true,
-        score: 68,
-        level: '경고',
-        warning: '호우주의보',
-        summary: '강남역 사거리 일대는 상습 노면 마루 적체 구간으로 깔때기형 저점 부근입니다.',
-        fullDesc: '종합 위험지수 68점으로 경고 단계에 도달했습니다. 주변 지형이 사방에서 모여드는 독특한 깔때기형 배치를 보여 노면 적체가 빠르게 가속되는 특징이 존재하며 고층 빌딩 지하 주차장 진입 구역 차수벽 설치가 필수적인 구조입니다.',
-        factors: [
-            { type: 'subway', name: '반지하 가구수', score: 15, percent: 5, desc: '반지하 가옥은 거의 없으나 지하 주차 시설 중심 유입 위험이 일부 존재합니다.' },
-            { type: 'terrain', name: '저지대 지형성', score: 92, percent: 50, desc: '테헤란로 및 주변 고지대로부터 빗물이 급격히 유입되는 역 마름모형 저점입니다.' },
-            { type: 'drainage', name: '배수밀도 역량', score: 70, percent: 30, desc: '반 배수 처리 역량은 갖추었으나 이물질 유입 시 순간 처리 효율이 급전직하합니다.' },
-            { type: 'history', name: '침수이력 데이터', score: 80, percent: 15, desc: '연도별 기습 폭우 사태 시 차량 침수 등 재산 피해 이력이 다수 발견되었습니다.' }
-        ],
-        shelters: [
-            { name: '강남구민체육센터', address: '서울시 강남구 삼성로 200', capacity: 400, lat: 37.4989, lng: 127.0322 }
-        ]
-    },
-    '홍대': {
-        isValidRegion: true,
-        score: 42,
-        level: '주의',
-        warning: null,
-        summary: '평탄 지형에 속하나 골목길 배수구 막힘 유입 관리가 필요합니다.',
-        fullDesc: '분석 결과 종합 점수 42점으로 주의 단계를 나타냅니다. 고도차가 크지 않은 평탄 지형을 이루고 있으나, 상업 시설 밀집 지구 특성상 유동 인구 배출 쓰레기로 인한 배수구 오염 유입 방지책이 지배적인 원인 요인으로 지목됩니다.',
-        factors: [
-            { type: 'subway', name: '반지하 가구수', score: 30, percent: 15, desc: '일부 상업용 지하 근린생활시설 내부 유입 관리가 수반되어야 합니다.' },
-            { type: 'terrain', name: '저지대 지형성', score: 35, percent: 20, desc: '경사 평탄화 분석 결과 지형적 집수 위험 요인은 상당히 낮은 축에 속합니다.' },
-            { type: 'drainage', name: '배수밀도 역량', score: 65, percent: 45, desc: '가장 큰 비중을 차지하는 요인으로 이물질로 인한 일시적 노면 배수 정체가 우려됩니다.' },
-            { type: 'history', name: '침수이력 데이터', score: 20, percent: 20, desc: '근래 대규모 침수 피해 및 가옥 파손 접수 이력은 경미한 수준입니다.' }
-        ],
-        shelters: []
-    },
-    '독도': {
-        isValidRegion: false
-    },
-    'default': {
-        isValidRegion: true,
-        score: 15,
-        level: '안전',
-        warning: null,
-        summary: '고도가 확보된 안전 지대이며 기본 관거 시스템 배수 인프라가 대단히 훌륭합니다.',
-        fullDesc: '최종 스코어 15점으로 극히 안전한 상태를 보존하고 있습니다. 도시 계획 인프라상 고성능 빗물 펌프 역량이 집중 할당되어 있으며, 자연 경사 배출이 원활하여 극단적 집중 호우 환경 하에서도 탄탄한 방어력을 갖추고 있습니다.',
-        factors: [
-            { type: 'subway', name: '반지하 가구수', score: 5, percent: 5, desc: '권역 내 하층 거주 가구 비율이 거의 전무하다시피 한 구조적 안정 지역입니다.' },
-            { type: 'terrain', name: '저지대 지형성', score: 10, percent: 10, desc: '자연 배수가 즉각 성립되는 평균 이상 고도의 우수한 경사 평면을 보유합니다.' },
-            { type: 'drainage', name: '배수밀도 역량', score: 90, percent: 70, desc: '초당 입방미터급 배출이 보장되는 최신 빗물 저류조 인프라가 조밀하게 확보되었습니다.' },
-            { type: 'history', name: '침수이력 데이터', score: 5, percent: 15, desc: '과거 방재 전산망 등록 이래로 범람 내역이 단 한 건도 감지되지 않았습니다.' }
-        ],
-        shelters: []
-    }
-};
-
+// 알림 모달 제어
 function showCustomModal(title, message) {
     document.getElementById('modal-title').innerText = title;
     document.getElementById('modal-msg').innerText = message;
@@ -100,7 +29,7 @@ function hideCustomModal() {
 }
 
 /**
- * 단일 책임 원칙에 의한 지도 레이어 및 원형 반경 동기화 통합 함수
+ * 지도 레이어 및 원형 반경 동기화 통합 함수
  */
 function updateMapLayers(lat, lng, level, popupText) {
     if (!appState.mapInstance) return;
@@ -116,6 +45,7 @@ function updateMapLayers(lat, lng, level, popupText) {
     }
 }
 
+// 초기 지도 인스턴스 설정
 function initRealMap() {
     if (appState.mapInstance) {
         appState.mapInstance.remove();
@@ -127,8 +57,7 @@ function initRealMap() {
         attribution: '&copy; OpenStreetMap'
     }).addTo(appState.mapInstance);
 
-    const initialLevel = mockAddressEngine[appState.currentPattern]?.isValidRegion ? mockAddressEngine[appState.currentPattern].level : '안전';
-    const targetColor = getRiskColor(initialLevel);
+    const targetColor = getRiskColor('안전');
 
     appState.mapCircle = L.circle([appState.currentLat, appState.currentLng], {
         color: targetColor, fillColor: targetColor, fillOpacity: 0.2, radius: 150
@@ -141,34 +70,26 @@ function initRealMap() {
 
     renderRiskGrid();
     updateFavToggleUI();
-    
 }
 
-/**
- * 바텀 시트를 접거나 펼치는 토글 기능 및 현재 위치 버튼 유연한 높이 동기화 연동
- */
 function toggleBottomSheet() {
     const sheet = document.getElementById('main-bottom-sheet');
     if (sheet) {
         sheet.classList.toggle('collapsed');
-        // 바텀 시트 토글 상태에 따라 현재 위치 버튼의 style.bottom 값을 실시간 연동
         syncGeolocationButtonPosition();
     }
 }
 
-/**
- * 바텀 시트의 collapsed 여부를 판별하여 현재 위치 확인 버튼의 높이를 실시간 제어하는 함수
- */
 function syncGeolocationButtonPosition() {
     const sheet = document.getElementById('main-bottom-sheet');
-    const geoBtn = document.getElementById('geo-btn'); // index.html에 추가된 id="geo-btn" 타겟팅
+    const geoBtn = document.getElementById('geo-btn');
     
     if (!sheet || !geoBtn) return;
     
     if (sheet.classList.contains('collapsed')) {
-        geoBtn.style.bottom = '60px'; // 바텀 시트가 접혔을 때는 아래로 이동
+        geoBtn.style.bottom = '60px';
     } else {
-        geoBtn.style.bottom = '340px'; // 바텀 시트가 펼쳐졌을 때는 원래 위치(위)로 복귀
+        geoBtn.style.bottom = '340px';
     }
 }
 
@@ -183,7 +104,6 @@ function tryGeoLocate() {
             appState.currentLat = pos.coords.latitude;
             appState.currentLng = pos.coords.longitude;
             appState.currentAddress = '현재 위치';
-            appState.currentPattern = 'default';
             initRealMap();
         },
         () => {
@@ -193,6 +113,9 @@ function tryGeoLocate() {
     );
 }
 
+/**
+ * [연동 수정] 1. 백엔드 GET /api/geocode 호출 구조로 매핑
+ */
 async function handleSearch() {
     const inputEl = document.getElementById('map-search-input');
     if (!inputEl || !inputEl.value.trim()) {
@@ -202,105 +125,125 @@ async function handleSearch() {
 
     const keyword = inputEl.value.trim();
 
-    let pattern = 'default';
-    if (keyword.includes('신림')) pattern = '신림';
-    else if (keyword.includes('강남')) pattern = '강남';
-    else if (keyword.includes('홍대')) pattern = '홍대';
-    else if (keyword.includes('독도')) pattern = '독도';
+    try {
+        // 백엔드 명세에 맞춰 /api/geocode 호출
+        const response = await fetch(`${BASE_URL}/geocode?keyword=${encodeURIComponent(keyword)}`);
+        if (!response.ok) throw new Error('서버 통신 실패');
+        
+        const resData = await response.json();
+        // 예상 반환 스펙: { lat: number, lng: number, address: string, is_valid: boolean }
+        
+        if (resData.is_valid === false) {
+            showCustomModal('분석 불가 지역', '해당 구역은 침수 분석 정보가 수집되지 않는 구역입니다.');
+            return;
+        }
 
-    if (pattern === '신림') { appState.currentLat = 37.4842; appState.currentLng = 126.9294; }
-    else if (pattern === '강남') { appState.currentLat = 37.4979; appState.currentLng = 127.0276; }
-    else if (pattern === '홍대') { appState.currentLat = 37.5565; appState.currentLng = 126.9239; }
-    else if (pattern === '독도') { appState.currentLat = 37.2428; appState.currentLng = 131.8689; }
-    else { appState.currentLat = 37.5665; appState.currentLng = 126.9780; }
+        appState.currentLat = resData.lat;
+        appState.currentLng = resData.lng;
+        appState.currentAddress = resData.address || keyword;
 
-    appState.currentAddress = keyword;
-    appState.currentPattern = pattern;
-    document.getElementById('sheet-title-addr').innerText = keyword;
-    updateFavToggleUI();
+        document.getElementById('sheet-title-addr').innerText = appState.currentAddress;
+        updateFavToggleUI();
 
-    const matchedData = mockAddressEngine[pattern];
-    const initialLevel = matchedData.isValidRegion ? matchedData.level : '안전';
+        if (appState.mapInstance) {
+            appState.mapInstance.setView([appState.currentLat, appState.currentLng], 16);
+            updateMapLayers(appState.currentLat, appState.currentLng, '안전', appState.currentAddress);
+        }
 
-    if (appState.mapInstance) {
-        appState.mapInstance.setView([appState.currentLat, appState.currentLng], 16);
-        updateMapLayers(appState.currentLat, appState.currentLng, initialLevel, keyword);
+        renderRiskGrid(); 
+        showCustomModal('위치 매핑 완료', `'${appState.currentAddress}'로 이동되었습니다. 아래에서 리포트를 확인하세요.`);
+    } catch (error) {
+        console.error(error);
+        showCustomModal('서버 오류', '위치 지오코딩 중 서버 오류가 발생했습니다.');
     }
-
-    renderWeatherBanner(matchedData.warning);
-    renderRiskGrid();
-    renderShelters(matchedData.isValidRegion ? matchedData.level : null, matchedData.shelters || []);
-
-    showCustomModal('위치 매핑 완료', `'${keyword}'로 지도 좌표 이동이 완료되었습니다.`);
 }
 
-function loadReportApi() {
-    const pattern = appState.currentPattern;
-    const data = mockAddressEngine[pattern];
-
+/**
+ * [연동 수정] 2. 백엔드 POST /api/risk-score 호출 구조로 매핑
+ */
+async function loadReportApi() {
     const errorCard = document.getElementById('error-no-data');
     const mainContent = document.getElementById('report-main-content');
 
-    if (!data.isValidRegion) {
+    document.getElementById('api-report-addr').innerText = appState.currentAddress;
+
+    try {
+        // 실제 백엔드 명세인 POST 방식으로 요청 본문 전달
+        const response = await fetch(`${BASE_URL}/risk-score`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                lat: appState.currentLat,
+                lng: appState.currentLng,
+                address: appState.currentAddress,
+                rainfall: appState.currentRainfall
+            })
+        });
+        
+        if (!response.ok) throw new Error('리포트 조회 실패');
+        const data = await response.json();
+        
+        // 데이터 비가용 지역 예외 처리
+        if (data.is_valid === false) {
+            errorCard.style.display = 'block';
+            mainContent.style.display = 'none';
+            return;
+        }
+
+        errorCard.style.display = 'none';
+        mainContent.style.display = 'block';
+
+        appState.currentLevel = data.level || '안전';
+        updateMapLayers(appState.currentLat, appState.currentLng, data.level, appState.currentAddress);
+
+        // 상단 날씨 배너 연동 (특보 정보가 있을 시)
+        renderWeatherBanner(data.warning || null);
+
+        const reportScoreEl = document.getElementById('api-report-score');
+        setTextWithPulse(reportScoreEl, data.score);
+
+        const gradeEl = document.getElementById('api-report-grade');
+        gradeEl.innerText = data.level;
+        gradeEl.style.color = getRiskColor(data.level);
+
+        const gaugeBar = document.getElementById('api-gauge-bar');
+        if (gaugeBar) {
+            const angle = -45 + (data.score * 1.8);
+            gaugeBar.style.borderColor = getRiskColor(data.level);
+            gaugeBar.style.transform = `rotate(${angle}deg)`;
+        }
+
+        updatePhaseBarHighlight(data.level);
+        document.getElementById('api-report-summary').innerText = data.summary ? `"${data.summary}"` : "분석 완료";
+
+        // 요인 분해 데이터 리스트 렌더링
+        renderFourFactors(data.factors || []);
+
+        const retryBox = document.getElementById('llm-retry-box');
+        const paragraphEl = document.getElementById('api-llm-full-paragraph');
+
+        if (appState.isLlmFailedMode || !data.full_desc) {
+            retryBox.style.display = 'block';
+            paragraphEl.innerText = "";
+        } else {
+            retryBox.style.display = 'none';
+            paragraphEl.innerText = data.full_desc;
+        }
+
+        const recalcScoreEl = document.getElementById('api-recalc-score');
+        setTextWithPulse(recalcScoreEl, data.score);
+        const recalcGrade = document.getElementById('api-recalc-grade');
+        recalcGrade.innerText = data.level;
+        recalcGrade.style.color = getRiskColor(data.level);
+
+        // 구현 제외 부가기능이지만 프론트 안전성을 위해 빈 배열 처리
+        renderShelters(data.level, data.shelters || []);
+
+    } catch (error) {
+        console.error(error);
         errorCard.style.display = 'block';
         mainContent.style.display = 'none';
-        document.getElementById('api-report-addr').innerText = appState.currentAddress;
-        return;
     }
-
-    errorCard.style.display = 'none';
-    mainContent.style.display = 'block';
-
-    let rainGap = appState.currentRainfall - 50;
-    // 불변성 유지를 위해 새로운 스코어 변수에 바인딩
-    let computedScore = Math.min(100, Math.max(5, data.score + Math.floor(rainGap * 0.4)));
-
-    let computedLevel = '주의';
-    if (computedScore <= 25) computedLevel = '안전';
-    else if (computedScore <= 50) computedLevel = '주의';
-    else if (computedScore <= 75) computedLevel = '경고';
-    else computedLevel = '위험';
-
-    updateMapLayers(appState.currentLat, appState.currentLng, computedLevel, appState.currentAddress);
-
-    document.getElementById('api-report-addr').innerText = appState.currentAddress;
-    const reportScoreEl = document.getElementById('api-report-score');
-    setTextWithPulse(reportScoreEl, computedScore);
-
-    const gradeEl = document.getElementById('api-report-grade');
-    gradeEl.innerText = computedLevel;
-    gradeEl.style.color = getRiskColor(computedLevel);
-
-    const gaugeBar = document.getElementById('api-gauge-bar');
-    if (gaugeBar) {
-        const angle = -45 + (computedScore * 1.8);
-        gaugeBar.style.borderColor = getRiskColor(computedLevel);
-        gaugeBar.style.transform = `rotate(${angle}deg)`;
-    }
-
-    updatePhaseBarHighlight(computedLevel);
-    document.getElementById('api-report-summary').innerText = `"${data.summary}"`;
-
-    renderFourFactors(data.factors, rainGap);
-
-    const retryBox = document.getElementById('llm-retry-box');
-    const paragraphEl = document.getElementById('api-llm-full-paragraph');
-
-    if (appState.isLlmFailedMode) {
-        retryBox.style.display = 'block';
-        paragraphEl.innerText = "";
-    } else {
-        retryBox.style.display = 'none';
-        paragraphEl.innerText = data.fullDesc;
-    }
-
-    const recalcScoreEl = document.getElementById('api-recalc-score');
-    setTextWithPulse(recalcScoreEl, computedScore);
-    const recalcGrade = document.getElementById('api-recalc-grade');
-    recalcGrade.innerText = computedLevel;
-    recalcGrade.style.color = getRiskColor(computedLevel);
-
-    renderShelters(computedLevel, data.shelters || []);
 }
 
 function updatePhaseBarHighlight(currentLevel) {
@@ -319,24 +262,19 @@ function updatePhaseBarHighlight(currentLevel) {
     }
 }
 
-function renderFourFactors(factors, rainGap) {
+function renderFourFactors(factors) {
     const listContainer = document.getElementById('api-factor-list');
-    if (!listContainer) return;
+    if (!listContainer || !factors) return;
 
     listContainer.innerHTML = factors.map(f => {
-        let adjustedScore = f.score;
-        // 하드코딩 텍스트가 아닌 영문 key 기반(type) 분기처리로 변형 방지
-        if (f.type === 'drainage' || f.type === 'terrain') {
-            adjustedScore = Math.min(100, Math.max(0, f.score + Math.floor(rainGap * 0.2)));
-        }
         return `
             <div class="factor-card">
                 <div class="factor-header">
                     <span class="factor-title">점수 요인: ${f.name}</span>
-                    <span class="factor-meta">기여도 <span class="factor-percent-highlight">${f.percent}%</span> | 요인 스코어: <strong>${adjustedScore}점</strong></span>
+                    <span class="factor-meta">기여도 <span class="factor-percent-highlight">${f.percent}%</span> | 요인 스코어: <strong>${f.score}점</strong></span>
                 </div>
                 <div class="factor-bar-bg">
-                    <div class="factor-bar-fill" style="width: ${adjustedScore}%; background: ${getRiskColor(adjustedScore > 70 ? '위험' : adjustedScore > 40 ? '경고' : '안전')};"></div>
+                    <div class="factor-bar-fill" style="width: ${f.score}%; background: ${getRiskColor(f.score > 70 ? '위험' : f.score > 40 ? '경고' : '안전')};"></div>
                 </div>
                 <div class="factor-desc"><strong>AI 설명:</strong> ${f.desc}</div>
             </div>
@@ -350,69 +288,62 @@ function retryLLMGeneration() {
     loadReportApi();
 }
 
-function loadResponseGuideApi() {
-    const data = mockAddressEngine[appState.currentPattern];
-    if (!data.isValidRegion) {
-        renderChecklist('api-guide-list-prep', []);
-        document.getElementById('api-guide-list-prep').innerHTML = '<div class="empty-text">분석 데이터가 없는 지역입니다. 위험 리포트에서 다른 주소를 검색해 주세요.</div>';
-        document.getElementById('evac-guide-box').style.display = 'none';
-        document.getElementById('delta-badge').style.display = 'none';
-        const chip = document.getElementById('tier-chip');
-        if (chip) {
-            chip.innerText = '-';
-            chip.style.color = '#94a3b8';
-            chip.style.borderColor = '#cbd5e1';
-            chip.style.background = '#f1f5f9';
-        }
-        document.getElementById('api-guide-addr').innerText = appState.currentAddress;
-        return;
-    }
-
+/**
+ * [연동 수정] 3. 백엔드 POST /api/response-guide 호출 구조로 매핑
+ */
+async function loadResponseGuideApi() {
     document.getElementById('api-guide-addr').innerText = appState.currentAddress;
 
-    let rainGap = appState.currentRainfall - 50;
-    let computedScore = Math.min(100, Math.max(5, data.score + Math.floor(rainGap * 0.4)));
+    try {
+        // 실제 백엔드 규격에 맞춰 POST 요청 수행
+        const response = await fetch(`${BASE_URL}/response-guide`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                level: appState.currentLevel,
+                rainfall: appState.currentRainfall,
+                address: appState.currentAddress
+            })
+        });
+        
+        if (!response.ok) throw new Error('가이드 조회 실패');
+        const data = await response.json();
 
-    let computedLevel = '주의';
-    if (computedScore <= 25) computedLevel = '안전';
-    else if (computedScore <= 50) computedLevel = '주의';
-    else if (computedScore <= 75) computedLevel = '경고';
-    else computedLevel = '위험';
+        const chip = document.getElementById('tier-chip');
+        if (chip) {
+            chip.innerText = `${appState.currentLevel} 단계 행동 요령`;
+            chip.style.color = '#fff';
+            chip.style.background = getRiskColor(appState.currentLevel);
+            chip.style.borderColor = getRiskColor(appState.currentLevel);
+        }
 
-    const chip = document.getElementById('tier-chip');
-    if (chip) {
-        chip.innerText = `${computedLevel} 단계 행동 요령`;
-        chip.style.color = '#fff';
-        chip.style.background = getRiskColor(computedLevel);
-        chip.style.borderColor = getRiskColor(computedLevel);
-    }
+        // 기준 대비 가변 편차 배지 처리 (있을 경우만)
+        if (data.rain_gap && Math.abs(data.rain_gap) > 0) {
+            document.getElementById('delta-badge').style.display = 'inline-block';
+        } else {
+            document.getElementById('delta-badge').style.display = 'none';
+        }
 
-    if (Math.abs(rainGap) > 0) {
-        document.getElementById('delta-badge').style.display = 'inline-block';
-    } else {
-        document.getElementById('delta-badge').style.display = 'none';
-    }
+        renderChecklist('api-guide-list-prep', data.prep_rules || []);
 
-    const prepRules = [
-        "가옥 내 하수구 마개 및 배수관 역류 방지 밸브 상태를 점검하십시오.",
-        "침수 유입 방지용 모래주머니나 물막이판을 출입구에 전면 배치하십시오."
-    ];
-    if (computedLevel === '경고' || computedLevel === '위험') {
-        prepRules.push("스마트폰 재난 안내방송 알림을 켜두고 실시간 하천 수위를 모니터링하세요.");
-    }
+        const evacBox = document.getElementById('evac-guide-box');
+        if (appState.currentLevel === '경고' || appState.currentLevel === '위험') {
+            evacBox.style.display = 'block';
+            renderChecklist('api-guide-list-evac', data.evac_rules || []);
+        } else {
+            evacBox.style.display = 'none';
+        }
 
-    renderChecklist('api-guide-list-prep', prepRules);
+        if (data.score) {
+            const recalcScoreEl = document.getElementById('api-recalc-score');
+            setTextWithPulse(recalcScoreEl, data.score);
+            const recalcGrade = document.getElementById('api-recalc-grade');
+            recalcGrade.innerText = appState.currentLevel;
+            recalcGrade.style.color = getRiskColor(appState.currentLevel);
+        }
 
-    const evacBox = document.getElementById('evac-guide-box');
-    if (computedLevel === '경고' || computedLevel === '위험') {
-        evacBox.style.display = 'block';
-        const evacRules = [
-            "지하 가옥 내부 바닥 면에 물이 비치거나 역류 징후 발생 시 즉시 대피하십시오.",
-            "지상 낙뢰 및 가로등 주변 감전 위협 요소를 회피하여 지정된 대피소로 이동하십시오."
-        ];
-        renderChecklist('api-guide-list-evac', evacRules);
-    } else {
-        evacBox.style.display = 'none';
+    } catch (error) {
+        console.error(error);
     }
 }
 
@@ -430,24 +361,6 @@ function renderChecklist(elementId, items) {
 function handleRainSlider(slider) {
     appState.currentRainfall = parseInt(slider.value);
     document.getElementById('rain-val').innerText = slider.value;
-
-    let rainGap = appState.currentRainfall - 50;
-    const data = mockAddressEngine[appState.currentPattern];
-    if (data && data.isValidRegion) {
-        let computedScore = Math.min(100, Math.max(5, data.score + Math.floor(rainGap * 0.4)));
-        let computedLevel = '주의';
-        if (computedScore <= 25) computedLevel = '안전';
-        else if (computedScore <= 50) computedLevel = '주의';
-        else if (computedScore <= 75) computedLevel = '경고';
-        else computedLevel = '위험';
-
-        const recalcScoreEl = document.getElementById('api-recalc-score');
-        setTextWithPulse(recalcScoreEl, computedScore);
-        const recalcGrade = document.getElementById('api-recalc-grade');
-        recalcGrade.innerText = computedLevel;
-        recalcGrade.style.color = getRiskColor(computedLevel);
-    }
-
     loadResponseGuideApi();
 }
 
@@ -476,20 +389,6 @@ function renderRiskGrid() {
     const centerLng = appState.currentLng;
     const step = 0.003;
 
-    const pattern = appState.currentPattern;
-    const data = mockAddressEngine[pattern];
-
-    if (!data.isValidRegion) {
-        const bounds = [
-            [centerLat - step * 1.5, centerLng - step * 1.5],
-            [centerLat + step * 1.5, centerLng + step * 1.5]
-        ];
-        const rect = L.rectangle(bounds, { color: '#94a3b8', weight: 1, fillOpacity: 0.15, dashArray: '4' }).addTo(appState.mapInstance)
-            .bindPopup('침수 정밀분석 불가 구역 (데이터 누락)');
-        appState.gridLayers.push(rect);
-        return;
-    }
-
     for (let i = -1; i <= 1; i++) {
         for (let j = -1; j <= 1; j++) {
             const lat1 = centerLat + (i * step) - (step / 2);
@@ -498,7 +397,7 @@ function renderRiskGrid() {
             const lng2 = lng1 + step;
 
             let gridLevel = '주의';
-            if (i + j === 0) gridLevel = data.level;
+            if (i + j === 0) gridLevel = '주의'; 
             else if ((i + j) % 2 === 0) gridLevel = '안전';
 
             const col = getRiskColor(gridLevel);
@@ -519,7 +418,7 @@ function renderShelters(currentLevel, shelters) {
     const emptyMsg = document.getElementById('shelter-empty-msg');
     const listContainer = document.getElementById('shelter-list');
 
-    if (!currentLevel || (currentLevel !== '경고' && currentLevel !== '위험') || shelters.length === 0) {
+    if (!currentLevel || (currentLevel !== '경고' && currentLevel !== '위험') || !shelters || shelters.length === 0) {
         if (emptyMsg) emptyMsg.style.display = 'block';
         if (listContainer) listContainer.innerHTML = '';
         return;
@@ -534,7 +433,7 @@ function renderShelters(currentLevel, shelters) {
                 html: `<div style="background:#16a34a; color:white; padding:4px 8px; border-radius:8px; font-size:10px; font-weight:bold; white-space:nowrap; border:1px solid white; box-shadow:0 2px 6px rgba(0,0,0,0.2);">🏡 대피소</div>`,
                 iconAnchor: [30, 10]
             })
-        }).addTo(appState.mapInstance).bindPopup(`<b>${s.name}</b><br>${s.address}<br>수용 가능 인원: ${s.capacity}명`);
+        }).addTo(appState.mapInstance).bindPopup(`<b>${s.name}</b><br>${s.address}`);
 
         appState.shelterMarkers.push(marker);
     });
@@ -544,7 +443,6 @@ function renderShelters(currentLevel, shelters) {
             <div class="shelter-card">
                 <div class="shelter-name">🏡 ${s.name}</div>
                 <div class="shelter-addr">${s.address}</div>
-                <div class="shelter-capacity">최대 수용: ${s.capacity}명</div>
             </div>
         `).join('');
     }
@@ -560,19 +458,7 @@ function setSheetTab(tabId) {
     } else if (tabId === 'shelter') {
         document.getElementById('tab-shelter').classList.add('active');
         document.getElementById('pane-shelter').classList.add('active');
-        const data = mockAddressEngine[appState.currentPattern];
-        let computedScore = data.score;
-        if (data.isValidRegion) {
-            let rainGap = appState.currentRainfall - 50;
-            computedScore = Math.min(100, Math.max(5, data.score + Math.floor(rainGap * 0.4)));
-        }
-        let computedLevel = '주의';
-        if (computedScore <= 25) computedLevel = '안전';
-        else if (computedScore <= 50) computedLevel = '주의';
-        else if (computedScore <= 75) computedLevel = '경고';
-        else computedLevel = '위험';
-
-        renderShelters(data.isValidRegion ? computedLevel : null, data.shelters || []);
+        loadReportApi();
     } else if (tabId === 'fav') {
         document.getElementById('tab-fav').classList.add('active');
         document.getElementById('pane-fav').classList.add('active');
@@ -602,8 +488,7 @@ function toggleFavorite() {
         favs.push({
             address: addr,
             lat: appState.currentLat,
-            lng: appState.currentLng,
-            pattern: appState.currentPattern
+            lng: appState.currentLng
         });
         showCustomModal('관심 위치 추가', '해당 주소를 상시 모니터링 관심 구역으로 등록했습니다.');
     }
@@ -661,20 +546,15 @@ function handleGoToFav(idx) {
     appState.currentLat = f.lat;
     appState.currentLng = f.lng;
     appState.currentAddress = f.address;
-    appState.currentPattern = f.pattern;
 
     document.getElementById('sheet-title-addr').innerText = f.address;
     document.getElementById('map-search-input').value = f.address;
 
     if (appState.mapInstance) {
         appState.mapInstance.setView([f.lat, f.lng], 16);
-        const data = mockAddressEngine[f.pattern];
-        const initialLevel = data.isValidRegion ? data.level : '안전';
-        updateMapLayers(f.lat, f.lng, initialLevel, f.address);
+        updateMapLayers(f.lat, f.lng, '주의', f.address);
     }
 
-    const matchedData = mockAddressEngine[f.pattern];
-    renderWeatherBanner(matchedData.warning);
     renderRiskGrid();
     updateFavToggleUI();
     setSheetTab('info');
@@ -747,16 +627,3 @@ window.addEventListener('DOMContentLoaded', () => {
     initRealMap();
     tryGeoLocate();
 });
-
-function syncGeolocationButtonPosition() {
-    const sheet = document.getElementById('main-bottom-sheet');
-    const geoBtn = document.getElementById('geo-btn');
-    
-    if (!sheet || !geoBtn) return;
-    
-    if (sheet.classList.contains('collapsed')) {
-        geoBtn.style.bottom = '55px';  /* 바텀 시트가 접혔을 때 내림 */
-    } else {
-        geoBtn.style.bottom = '340px'; /* 바텀 시트가 펼쳐졌을 때 올림 */
-    }
-}
