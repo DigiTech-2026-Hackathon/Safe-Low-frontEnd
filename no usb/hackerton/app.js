@@ -84,15 +84,10 @@ function toggleBottomSheet() {
 }
 
 function syncGeolocationButtonPosition() {
-    const sheet = document.getElementById('main-bottom-sheet');
+    // 인라인 스타일(.style.bottom)이 CSS 규칙을 방해하지 않도록 완전히 제거합니다.
     const geoBtn = document.getElementById('geo-btn');
-
-    if (!sheet || !geoBtn) return;
-
-    if (sheet.classList.contains('collapsed')) {
-        geoBtn.style.bottom = '60px';
-    } else {
-        geoBtn.style.bottom = '340px';
+    if (geoBtn) {
+        geoBtn.style.bottom = '';
     }
 }
 
