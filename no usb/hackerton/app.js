@@ -141,6 +141,35 @@ function initRealMap() {
 
     renderRiskGrid();
     updateFavToggleUI();
+    
+}
+
+/**
+ * 바텀 시트를 접거나 펼치는 토글 기능 및 현재 위치 버튼 유연한 높이 동기화 연동
+ */
+function toggleBottomSheet() {
+    const sheet = document.getElementById('main-bottom-sheet');
+    if (sheet) {
+        sheet.classList.toggle('collapsed');
+        // 바텀 시트 토글 상태에 따라 현재 위치 버튼의 style.bottom 값을 실시간 연동
+        syncGeolocationButtonPosition();
+    }
+}
+
+/**
+ * 바텀 시트의 collapsed 여부를 판별하여 현재 위치 확인 버튼의 높이를 실시간 제어하는 함수
+ */
+function syncGeolocationButtonPosition() {
+    const sheet = document.getElementById('main-bottom-sheet');
+    const geoBtn = document.getElementById('geo-btn'); // index.html에 추가된 id="geo-btn" 타겟팅
+    
+    if (!sheet || !geoBtn) return;
+    
+    if (sheet.classList.contains('collapsed')) {
+        geoBtn.style.bottom = '60px'; // 바텀 시트가 접혔을 때는 아래로 이동
+    } else {
+        geoBtn.style.bottom = '340px'; // 바텀 시트가 펼쳐졌을 때는 원래 위치(위)로 복귀
+    }
 }
 
 function tryGeoLocate() {
@@ -155,18 +184,7 @@ function tryGeoLocate() {
             appState.currentLng = pos.coords.longitude;
             appState.currentAddress = '현재 위치';
             appState.currentPattern = 'default';
-            
-            const inputEl = document.getElementById('map-search-input');
-            if (inputEl) inputEl.value = '현재 위치';
-            
             initRealMap();
-            
-            const matchedData = mockAddressEngine['default'];
-            renderWeatherBanner(matchedData.warning);
-            renderRiskGrid();
-            renderShelters(matchedData.isValidRegion ? matchedData.level : null, matchedData.shelters || []);
-            
-            showCustomModal('위치 재탐색 완료', '현재 GPS 상의 위치로 지도가 갱신되었습니다.');
         },
         () => {
             showCustomModal('위치 확인 불가', 'GPS 권한이 없어 기본 위치로 표시합니다. 상단 검색창에서 주소를 입력해 주세요.');
@@ -707,7 +725,6 @@ function setTextWithPulse(el, newValue) {
     }
 }
 
-// 위험 컬러 매핑 유틸 함수
 function getRiskColor(level) {
     if (level === '안전') return '#10b981';
     if (level === '주의') return '#f59e0b';
@@ -730,31 +747,16 @@ window.addEventListener('DOMContentLoaded', () => {
     initRealMap();
     tryGeoLocate();
 });
-// 기존 스크립트 코드 하단부 혹은 적절한 위치에 아래 함수를 추가합니다.
 
-/**
- * 바텀 시트를 접거나 펼치는 토글 기능 구현 (닫았을 때는 상단 바만 남김)
- */
-function toggleBottomSheet() {
+function syncGeolocationButtonPosition() {
     const sheet = document.getElementById('main-bottom-sheet');
-    if (!sheet) return;
+    const geoBtn = document.getElementById('geo-btn');
     
-    // collapsed 클래스가 있으면 제거하고 없으면 추가하여 상태를 토글
-    sheet.classList.toggle('collapsed');
-}
-
-// 기존 switchView 함수 내 내비게이션 바 상태 보완 보장 확인
-function switchView(viewId) {
-    document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
-    document.querySelectorAll('.act-btn').forEach(b => b.classList.remove('active'));
-
-    document.getElementById(viewId).classList.add('active');
+    if (!sheet || !geoBtn) return;
     
-    const targetNavBtn = document.getElementById(`nav-btn-${viewId}`);
-    if (targetNavBtn) {
-        targetNavBtn.classList.add('active');
+    if (sheet.classList.contains('collapsed')) {
+        geoBtn.style.bottom = '55px';  /* 바텀 시트가 접혔을 때 내림 */
+    } else {
+        geoBtn.style.bottom = '340px'; /* 바텀 시트가 펼쳐졌을 때 올림 */
     }
-
-    if (viewId === 'view2') loadReportApi();
-    if (viewId === 'view3') loadResponseGuideApi();
 }
