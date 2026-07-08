@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>반지하·저지대 침수 취약가구 위험 예측 서비스</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="phone-wrapper">
+
+        <div id="view1" class="view-container active">
+            <div class="top-sticky-area">
+                <div class="search-container">
+                    <div class="search-bar">
+                        <input type="text" id="map-search-input" placeholder="주소 또는 건물명 입력... (예: 신림, 강남, 홍대, 독도)">
+                    </div>
+                    <button class="btn-pin" onclick="handleSearch()">검색</button>
+                </div>
+                <div class="alert-banner" id="weather-alert-banner" style="display: none;">호우경보 활성화</div>
+            </div>
+
+            <div class="map-area" id="map-canvas"></div>
+
+            <div class="map-legend" id="risk-map-legend">
+                <div class="legend-item"><span class="legend-dot dot-safe"></span>안전</div>
+                <div class="legend-item"><span class="legend-dot dot-watch"></span>주의</div>
+                <div class="legend-item"><span class="legend-dot dot-warn"></span>경고</div>
+                <div class="legend-item"><span class="legend-dot dot-danger"></span>위험</div>
+                <div class="legend-item"><span class="legend-dot dot-none"></span>분석불가</div>
+            </div>
+
+            <div class="bottom-sheet">
+                <div class="sheet-handle"></div>
+                <div class="sheet-header">
+                    <h3 id="sheet-title-addr">위치 선택 대기 중</h3>
+                    <button class="btn-fav" id="btn-fav-toggle" onclick="toggleFavorite()">☆ 관심 위치 저장</button>
+                </div>
+                <div class="sheet-tabs">
+                    <div class="sheet-tab active" id="tab-info" onclick="setSheetTab('info')">위험도 확인</div>
+                    <div class="sheet-tab" id="tab-shelter" onclick="setSheetTab('shelter')">인근 대피소</div>
+                    <div class="sheet-tab" id="tab-fav" onclick="setSheetTab('fav')">관심 위치</div>
+                </div>
+
+                <div class="sheet-pane active" id="pane-info">
+                    <p class="pane-desc">위 주소의 실시간 침수 위험도를 분석하려면 아래 버튼을 누르세요.</p>
+                    <button class="btn-primary-action" onclick="switchView('view2')">위험 리포트 상세보기</button>
+                </div>
+
+                <div class="sheet-pane" id="pane-shelter">
+                    <div id="shelter-empty-msg" class="empty-text">현재 위험 단계가 '경고' 이상일 때 인근 대피소가 표시됩니다.</div>
+                    <div id="shelter-list"></div>
+                </div>
+
+                <div class="sheet-pane" id="pane-fav">
+                    <div id="fav-empty-msg" class="empty-text">저장된 관심 위치가 없습니다.</div>
+                    <div id="fav-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view2" class="view-container">
+            <header class="app-header">
+                <div class="header-left">
+                    <span class="back-arrow" onclick="switchView('view1')">이전</span>
+                    <div>
+                        <div class="report-header-title">위험 리포트</div>
+                        <div class="header-subtitle" id="api-report-addr">조회된 위치가 없습니다.</div>
+                    </div>
+                </div>
+                <button class="btn-text" onclick="showCustomModal('공유하기', '현재 위치의 위험 리포트 링크가 복사되었습니다.')">공유</button>
+            </header>
+
+            <main class="scroll-content">
+                <div id="error-no-data" class="error-card" style="display: none;">
+                    <div class="error-icon">주의</div>
+                    <h4>분석 데이터가 없습니다</h4>
+                    <p>해당 지역은 침수 분석 정보가 수집되지 않는 구역입니다. 다른 주소를 검색해 주세요.</p>
+                </div>
+
+                <div id="report-main-content">
+                    <div class="report-card">
+                        <div class="report-score-title">AI 종합 침수 위험 스코어</div>
+                        <div class="score-flex">
+                            <div>
+                                <div class="huge-score" id="api-report-score">-</div>
+                                <div class="report-grade-text" id="api-report-grade">대기 중</div>
+                            </div>
+                            <div class="gauge-container">
+                                <div class="gauge-track"></div>
+                                <div class="gauge-bar" id="api-gauge-bar"></div>
+                            </div>
+                        </div>
+
+                        <div class="risk-phase-wrapper">
+                            <div class="phase-bar-container">
+                                <div class="phase-chunk chunk-safe">안전</div>
+                                <div class="phase-chunk chunk-watch">주의</div>
+                                <div class="phase-chunk chunk-warn">경고</div>
+                                <div class="phase-chunk chunk-danger">위험</div>
+                            </div>
+                        </div>
+
+                        <div class="ai-summary-box">
+                            <div class="ai-summary-title">AI 한줄 요약</div>
+                            <div class="ai-summary-body" id="api-report-summary">분석 대기 중...</div>
+                        </div>
+                    </div>
+
+                    <div class="section-title-container">
+                        <div class="section-title">위험 요인 분석</div>
+                    </div>
+                    <div id="api-factor-list"></div>
+
+                    <div class="section-title-container">
+                        <div class="section-title">AI 종합 설명</div>
+                    </div>
+                    <div class="ai-full-desc-box">
+                        <h4 class="ai-full-title">침수 위험 정밀 진단</h4>
+                        <p class="desc-paragraph" id="api-llm-full-paragraph">데이터 분석 중...</p>
+                        <div id="llm-retry-box" class="retry-zone" style="display:none;">
+                            <p class="retry-msg">실시간 위험 설명 바인딩에 실패했습니다.</p>
+                            <button class="btn-retry" onclick="retryLLMGeneration()">다시 생성</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <div id="view3" class="view-container">
+            <header class="app-header">
+                <div class="header-left">
+                    <span class="back-arrow" onclick="switchView('view1')">이전</span>
+                    <div>
+                        <div class="report-header-title">시나리오 대응 안내</div>
+                        <div class="header-subtitle" id="api-guide-addr">조회된 위치가 없습니다.</div>
+                    </div>
+                </div>
+                <div class="api-meta-container">
+                    <span class="badge-delta" id="delta-badge" style="display:none;">가변</span>
+                    <span class="chip-tier" id="tier-chip">-</span>
+                </div>
+            </header>
+
+            <main class="scroll-content">
+                <div class="slider-box">
+                    <div class="slider-header">
+                        <span class="slider-title">가상 누적 강우량 설정</span>
+                        <span class="slider-value-display"><strong id="rain-val">50</strong> mm</span>
+                    </div>
+                    <input type="range" id="rain-slider" class="range-input" min="10" max="200" step="5" value="50" oninput="handleRainSlider(this)">
+                    <p class="slider-hint">강우량을 조절하면 위험 스코어 및 행동 요령이 실시간 비동기 연동됩니다.</p>
+                </div>
+
+                <div class="recalc-indicator-card">
+                    <span class="recalc-txt">실시간 조건부 점수: <strong id="api-recalc-score">-</strong>점 (<span id="api-recalc-grade">-</span>)</span>
+                </div>
+
+                <div class="action-card color-blue">
+                    <div class="action-title">사전 준비 가이드</div>
+                    <div class="action-list" id="api-guide-list-prep"></div>
+                </div>
+
+                <div class="action-card color-red" id="evac-guide-box" style="display:none;">
+                    <div class="action-title title-danger">대피 판단 가이드</div>
+                    <div class="action-list" id="api-guide-list-evac"></div>
+                    <button class="cta-move-btn danger" onclick="goToShelterTab()">인근 대피소 확인하기</button>
+                </div>
+
+                <div class="retry-btn-container">
+                    <button class="btn-retry" onclick="retryResponseGuide()">대응 안내 다시 생성</button>
+                </div>
+            </main>
+        </div>
+
+        <footer class="bottom-actions">
+            <button class="act-btn blue-text active" id="nav-btn-view1" onclick="switchView('view1')">위치 지도</button>
+            <button class="act-btn red-text" id="nav-btn-view2" onclick="switchView('view2')">위험 리포트</button>
+            <button class="act-btn green-text" id="nav-btn-view3" onclick="switchView('view3')">시나리오 대응</button>
+        </footer>
+
+        <div class="custom-modal-backdrop" id="custom-modal">
+            <div class="custom-modal-window">
+                <div class="modal-header" id="modal-title">시스템 안내</div>
+                <div class="modal-body" id="modal-msg">안내 문구</div>
+                <div class="modal-footer">
+                    <button class="btn-modal-close" onclick="hideCustomModal()">확인</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
