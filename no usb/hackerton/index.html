@@ -20,20 +20,20 @@
                     <button class="btn-pin" onclick="handleSearch()">검색</button>
                 </div>
                 <div class="alert-banner" id="weather-alert-banner" style="display: none;">호우경보 활성화</div>
+                
+                <div class="map-legend-v" id="risk-map-legend">
+                    <div class="legend-item"><span class="legend-dot dot-safe"></span>안전</div>
+                    <div class="legend-item"><span class="legend-dot dot-watch"></span>주의</div>
+                    <div class="legend-item"><span class="legend-dot dot-warn"></span>경고</div>
+                    <div class="legend-item"><span class="legend-dot dot-danger"></span>위험</div>
+                    <div class="legend-item"><span class="legend-dot dot-none"></span>분석불가</div>
+                </div>
             </div>
 
             <div class="map-area" id="map-canvas"></div>
 
-            <div class="map-legend" id="risk-map-legend">
-                <div class="legend-item"><span class="legend-dot dot-safe"></span>안전</div>
-                <div class="legend-item"><span class="legend-dot dot-watch"></span>주의</div>
-                <div class="legend-item"><span class="legend-dot dot-warn"></span>경고</div>
-                <div class="legend-item"><span class="legend-dot dot-danger"></span>위험</div>
-                <div class="legend-item"><span class="legend-dot dot-none"></span>분석불가</div>
-            </div>
-
-            <div class="bottom-sheet">
-                <div class="sheet-handle"></div>
+            <div class="bottom-sheet" id="main-bottom-sheet">
+                <div class="sheet-handle" onclick="toggleBottomSheet()"></div>
                 <div class="sheet-header">
                     <h3 id="sheet-title-addr">위치 선택 대기 중</h3>
                     <button class="btn-fav" id="btn-fav-toggle" onclick="toggleFavorite()">☆ 관심 위치 저장</button>

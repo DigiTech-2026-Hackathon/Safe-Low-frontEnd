@@ -155,7 +155,18 @@ function tryGeoLocate() {
             appState.currentLng = pos.coords.longitude;
             appState.currentAddress = '현재 위치';
             appState.currentPattern = 'default';
+            
+            const inputEl = document.getElementById('map-search-input');
+            if (inputEl) inputEl.value = '현재 위치';
+            
             initRealMap();
+            
+            const matchedData = mockAddressEngine['default'];
+            renderWeatherBanner(matchedData.warning);
+            renderRiskGrid();
+            renderShelters(matchedData.isValidRegion ? matchedData.level : null, matchedData.shelters || []);
+            
+            showCustomModal('위치 재탐색 완료', '현재 GPS 상의 위치로 지도가 갱신되었습니다.');
         },
         () => {
             showCustomModal('위치 확인 불가', 'GPS 권한이 없어 기본 위치로 표시합니다. 상단 검색창에서 주소를 입력해 주세요.');
@@ -696,6 +707,7 @@ function setTextWithPulse(el, newValue) {
     }
 }
 
+// 위험 컬러 매핑 유틸 함수
 function getRiskColor(level) {
     if (level === '안전') return '#10b981';
     if (level === '주의') return '#f59e0b';
@@ -718,3 +730,31 @@ window.addEventListener('DOMContentLoaded', () => {
     initRealMap();
     tryGeoLocate();
 });
+// 기존 스크립트 코드 하단부 혹은 적절한 위치에 아래 함수를 추가합니다.
+
+/**
+ * 바텀 시트를 접거나 펼치는 토글 기능 구현 (닫았을 때는 상단 바만 남김)
+ */
+function toggleBottomSheet() {
+    const sheet = document.getElementById('main-bottom-sheet');
+    if (!sheet) return;
+    
+    // collapsed 클래스가 있으면 제거하고 없으면 추가하여 상태를 토글
+    sheet.classList.toggle('collapsed');
+}
+
+// 기존 switchView 함수 내 내비게이션 바 상태 보완 보장 확인
+function switchView(viewId) {
+    document.querySelectorAll('.view-container').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.act-btn').forEach(b => b.classList.remove('active'));
+
+    document.getElementById(viewId).classList.add('active');
+    
+    const targetNavBtn = document.getElementById(`nav-btn-${viewId}`);
+    if (targetNavBtn) {
+        targetNavBtn.classList.add('active');
+    }
+
+    if (viewId === 'view2') loadReportApi();
+    if (viewId === 'view3') loadResponseGuideApi();
+}
