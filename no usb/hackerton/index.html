@@ -15,14 +15,13 @@
             <div class="top-sticky-area">
                 <div class="search-container">
                     <div class="search-bar">
-                        <input type="text" id="map-search-input" placeholder="주소 또는 건물명 입력... (예: 신림, 강남, 홍대, 독도)">
+                        <input type="text" id="map-search-input" placeholder="시범 구역 주소 입력 (예: 신림로 100)">
                     </div>
                     <button class="btn-pin" onclick="handleSearch()">검색</button>
                 </div>
-                <div class="alert-banner" id="weather-alert-banner" style="display: none;">호우경보 활성화</div>
+                <div class="alert-banner" id="weather-alert-banner" style="display: none;">기상 특보 발생</div>
                 
                 <div class="map-legend-v" id="risk-map-legend">
-                    
                     <div class="legend-item"><span class="legend-dot dot-safe"></span>안전</div>
                     <div class="legend-item"><span class="legend-dot dot-watch"></span>주의</div>
                     <div class="legend-item"><span class="legend-dot dot-warn"></span>경고</div>
@@ -47,12 +46,12 @@
                 </div>
 
                 <div class="sheet-pane active" id="pane-info">
-                    <p class="pane-desc">위 주소의 실시간 침수 위험도를 분석하려면 아래 버튼을 누르세요.</p>
+                    <p class="pane-desc">선택된 위치의 AI 종합 침수 위험 리포트를 확인하고 정밀 분석 결과를 받아보세요.</p>
                     <button class="btn-primary-action" onclick="switchView('view2')">위험 리포트 상세보기</button>
                 </div>
 
                 <div class="sheet-pane" id="pane-shelter">
-                    <div id="shelter-empty-msg" class="empty-text">현재 위험 단계가 '경고' 이상일 때 인근 대피소가 표시됩니다.</div>
+                    <div id="shelter-empty-msg" class="empty-text">현재 위험 단계가 '경고' 이상일 때 인근 지정 대피소 목록이 제공됩니다.</div>
                     <div id="shelter-list"></div>
                 </div>
 
@@ -62,7 +61,7 @@
                 </div>
 
                 <div class="sheet-pane" id="pane-history">
-                    <div id="history-empty-msg" class="empty-text">조회 이력이 없습니다.</div>
+                    <div id="history-empty-msg" class="empty-text">조회 기록 이력이 존재하지 않습니다.</div>
                     <div id="history-list"></div>
                 </div>
             </div>
@@ -73,20 +72,20 @@
         <div id="view2" class="view-container">
             <header class="app-header">
                 <div class="header-left">
-                    <span class="back-arrow" onclick="switchView('view1')">이전</span>
+                    <span class="back-arrow" onclick="switchView('view1')">◀ 지도</span>
                     <div>
                         <div class="report-header-title">위험 리포트</div>
                         <div class="header-subtitle" id="api-report-addr">조회된 위치가 없습니다.</div>
                     </div>
                 </div>
-                <button class="btn-text" onclick="showCustomModal('공유하기', '현재 위치의 위험 리포트 링크가 복사되었습니다.')">공유</button>
+                <button class="btn-text" onclick="showCustomModal('공유하기', '현재 위치의 위험 리포트 단축 링크가 클립보드에 복사되었습니다.')">공유</button>
             </header>
 
             <main class="scroll-content">
                 <div id="error-no-data" class="error-card" style="display: none;">
-                    <div class="error-icon">주의</div>
-                    <h4>분석 데이터가 없습니다</h4>
-                    <p>해당 지역은 침수 분석 정보가 수집되지 않는 구역입니다. 다른 주소를 검색해 주세요.</p>
+                    <div class="error-icon">⚠</div>
+                    <h4>분석 데이터 미커버 지역</h4>
+                    <p>해당 구역은 시범 운영 구역 외 국가 침수 취약 데이터 분석이 지원되지 않는 지역입니다.</p>
                 </div>
 
                 <div id="report-main-content">
@@ -119,19 +118,18 @@
                     </div>
 
                     <div class="section-title-container">
-                        <div class="section-title">위험 요인 분석</div>
+                        <div class="section-title">요인별 기여도 분석</div>
                     </div>
                     <div id="api-factor-list"></div>
 
                     <div class="section-title-container">
-                        <div class="section-title">AI 종합 설명</div>
+                        <div class="section-title">AI 침수 위험 정밀 진단</div>
                     </div>
                     <div class="ai-full-desc-box">
-                        <h4 class="ai-full-title">침수 위험 정밀 진단</h4>
                         <p class="desc-paragraph" id="api-llm-full-paragraph">데이터 분석 중...</p>
                         <div id="llm-retry-box" class="retry-zone" style="display:none;">
-                            <p class="retry-msg">실시간 위험 설명 바인딩에 실패했습니다.</p>
-                            <button class="btn-retry" onclick="retryLLMGeneration()">다시 생성</button>
+                            <p class="retry-msg">실시간 위험 진단 바인딩에 실패했습니다.</p>
+                            <button class="btn-retry" onclick="retryLLMGeneration()">다시 요청</button>
                         </div>
                     </div>
                 </div>
@@ -141,7 +139,7 @@
         <div id="view3" class="view-container">
             <header class="app-header">
                 <div class="header-left">
-                    <span class="back-arrow" onclick="switchView('view1')">이전</span>
+                    <span class="back-arrow" onclick="switchView('view1')">◀ 지도</span>
                     <div>
                         <div class="report-header-title">시나리오 대응 안내</div>
                         <div class="header-subtitle" id="api-guide-addr">조회된 위치가 없습니다.</div>
@@ -157,10 +155,10 @@
                 <div class="slider-box">
                     <div class="slider-header">
                         <span class="slider-title">가상 누적 강우량 설정</span>
-                        <span class="slider-value-display"><strong id="rain-val">50</strong> mm</span>
+                        <span class="slider-value-display"><strong id="rain-val">50</strong> mm/h</span>
                     </div>
                     <input type="range" id="rain-slider" class="range-input" min="10" max="200" step="5" value="50" oninput="handleRainSlider(this)">
-                    <p class="slider-hint">강우량을 조절하면 위험 스코어 및 행동 요령이 실시간 비동기 연동됩니다.</p>
+                    <p class="slider-hint">강우량을 조절하면 변경된 침수 시나리오 스코어와 AI 행동 지침이 실시간 갱신됩니다.</p>
                 </div>
 
                 <div class="recalc-indicator-card">
@@ -173,9 +171,9 @@
                 </div>
 
                 <div class="action-card color-red" id="evac-guide-box" style="display:none;">
-                    <div class="action-title title-danger">대피 판단 가이드</div>
+                    <div class="action-title title-danger">위급 대피 판단 가이드</div>
                     <div class="action-list" id="api-guide-list-evac"></div>
-                    <button class="cta-move-btn danger" onclick="goToShelterTab()">인근 대피소 확인하기</button>
+                    <button class="cta-move-btn danger" onclick="goToShelterTab()">인근 대피소 위치 확인하기</button>
                 </div>
 
                 <div class="retry-btn-container">
