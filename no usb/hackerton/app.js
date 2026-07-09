@@ -1,6 +1,6 @@
 // 백엔드 주소 (FastAPI). main.py가 frontend/를 같은 오리진에서 서빙하지만,
 // VSCode Live Server 등 별도 dev server로 index.html을 열 수도 있으므로 절대경로로 고정.
-const BASE_URL = 'http://localhost:8000/api';
+const BASE_URL = '/api';
 
 const FAV_STORAGE_KEY = 'flood_risk_favorites';
 
