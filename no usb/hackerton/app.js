@@ -57,9 +57,20 @@ function updateMapLayers(lat, lng, level, popupText) {
     if (!appState.mapInstance) return;
     const targetPos = [lat, lng];
 
+    // 마커 객체가 확실히 존재할 때만 팝업 조작
     if (appState.mapMarker) {
-        appState.mapMarker.setLatLng(targetPos).bindPopup(popupText).openPopup();
+        appState.mapMarker.setLatLng(targetPos);
+        if (popupText) {
+            appState.mapMarker.bindPopup(popupText);
+            // 지도가 완전히 로드된 후 안정적으로 팝업을 열 수 있도록 보장
+            setTimeout(() => {
+                if (appState.mapMarker && appState.mapInstance) {
+                    appState.mapMarker.openPopup();
+                }
+            }, 100);
+        }
     }
+    
     if (appState.mapCircle) {
         appState.mapCircle.setLatLng(targetPos);
         const col = getRiskColor(level);
@@ -173,21 +184,29 @@ async function handleSearch() {
         appState.currentLat = geo.lat;
         appState.currentLng = geo.lng;
         appState.currentAddress = geo.address_road || geo.address_jibun || geo.address || keyword;
+        
+        // 검색된 새로운 위치 정보에 맞춰 기존 데이터 캐시들 초기화
         resetLocationBoundState();
 
         document.getElementById('sheet-title-addr').innerText = appState.currentAddress;
         updateFavToggleUI();
 
+        // [수정] 지도가 안전하게 존재할 때만 부드럽게 화면 이동 및 레이어 갱신
         if (appState.mapInstance) {
             appState.mapInstance.setView([appState.currentLat, appState.currentLng], 16);
             updateMapLayers(appState.currentLat, appState.currentLng, '안전', appState.currentAddress);
         }
 
+        // 주변 격자 데이터 리로드
         renderRiskGrid();
-        showCustomModal('위치 매핑 완료', `'${appState.currentAddress}'로 이동되었습니다. 아래에서 리포트를 확인하세요.`);
+        
+        // [추가] 중요! 검색한 새로운 위치의 위험 분석 리포트(화면2 데이터)를 백엔드에 즉시 요청해 채워 넣음
+        await loadReportApi();
+
+        showCustomModal('위치 매핑 완료', `'${appState.currentAddress}'로 이동되었으며 위험도 분석이 완료되었습니다.`);
     } catch (error) {
-        console.error(error);
-        showCustomModal('서버 오류', '위치 지오코딩 중 서버 오류가 발생했습니다.');
+        console.error('검색 실행 중 오류 발생:', error);
+        showCustomModal('서버 오류', '위치 지오코딩 및 분석 중 오류가 발생했습니다.');
     }
 }
 
