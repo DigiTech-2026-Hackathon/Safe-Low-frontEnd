@@ -19,6 +19,7 @@ const appState = {
     mapCircle: null,
     shelterMarkers: [],
     gridLayers: [],
+    gridRequestId: 0,
     isLlmFailedMode: false
 };
 
@@ -424,34 +425,79 @@ function renderWeatherBanner(warningText) {
     }
 }
 
-function renderRiskGrid() {
+/**
+ * [연동] 격자(9칸) 각 칸의 중심좌표로 POST /api/risk-score를 개별 호출해
+ * 실제 위험도로 색을 칠한다. appState.currentBuildingId/currentLevel 등
+ * '현재 선택 위치' 상태는 건드리지 않는다(각 칸은 어디까지나 주변 참고용).
+ */
+async function fetchGridCellRisk(lat, lng) {
+    try {
+        const response = await fetch(`${BASE_URL}/risk-score`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                lat, lng,
+                address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+                rainfall: appState.currentRainfall
+            })
+        });
+
+        if (!response.ok) return null;
+        const resJson = await response.json();
+        if (resJson.success === false) return null;
+
+        return resJson.data?.level || null;
+    } catch (error) {
+        console.error('격자 셀 위험도 조회 실패:', error);
+        return null;
+    }
+}
+
+async function renderRiskGrid() {
     if (!appState.mapInstance) return;
     appState.gridLayers.forEach(layer => appState.mapInstance.removeLayer(layer));
     appState.gridLayers = [];
+
+    // 검색이 연달아 일어날 경우, 늦게 도착한 이전 요청 결과가 최신 화면을 덮어쓰지 않도록
+    // 이번 렌더링 회차를 식별하는 토큰을 발급한다.
+    const requestId = ++appState.gridRequestId;
 
     const centerLat = appState.currentLat;
     const centerLng = appState.currentLng;
     const step = 0.003;
 
+    const cells = [];
     for (let i = -1; i <= 1; i++) {
         for (let j = -1; j <= 1; j++) {
             const lat1 = centerLat + (i * step) - (step / 2);
             const lng1 = centerLng + (j * step) - (step / 2);
             const lat2 = lat1 + step;
             const lng2 = lng1 + step;
-
-            let gridLevel = '주의';
-            if (i + j === 0) gridLevel = '주의';
-            else if ((i + j) % 2 === 0) gridLevel = '안전';
-
-            const col = getRiskColor(gridLevel);
-            const rect = L.rectangle([[lat1, lng1], [lat2, lng2]], {
-                color: col, weight: 1, fillColor: col, fillOpacity: 0.08
-            }).addTo(appState.mapInstance);
-
-            appState.gridLayers.push(rect);
+            cells.push({
+                lat1, lng1, lat2, lng2,
+                centerLat: (lat1 + lat2) / 2,
+                centerLng: (lng1 + lng2) / 2
+            });
         }
     }
+
+    // 9칸을 병렬로 조회
+    const levels = await Promise.all(
+        cells.map(c => fetchGridCellRisk(c.centerLat, c.centerLng))
+    );
+
+    // 조회하는 동안 다른 위치 검색이 실행됐다면 이 결과는 폐기(구버전 렌더링 방지)
+    if (requestId !== appState.gridRequestId) return;
+
+    cells.forEach((c, idx) => {
+        const level = levels[idx]; // null이면 '분석불가' 색으로 표시
+        const col = getRiskColor(level);
+        const rect = L.rectangle([[c.lat1, c.lng1], [c.lat2, c.lng2]], {
+            color: col, weight: 1, fillColor: col, fillOpacity: 0.08
+        }).addTo(appState.mapInstance);
+
+        appState.gridLayers.push(rect);
+    });
 }
 
 function renderShelters(currentLevel, shelters) {
@@ -628,7 +674,8 @@ function getRiskColor(level) {
     if (level === '안전') return '#10b981';
     if (level === '주의') return '#f59e0b';
     if (level === '경고') return '#f97316';
-    return '#ef4444';
+    if (level === '위험') return '#ef4444';
+    return '#94a3b8'; // 분석불가 / 알 수 없음
 }
 
 function switchView(viewId) {
