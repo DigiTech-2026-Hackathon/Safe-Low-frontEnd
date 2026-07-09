@@ -495,8 +495,8 @@ async function renderRiskGrid() {
         cells.forEach(cell => {
             const col = getRiskColor(cell.risk_level);
            const rect = L.rectangle([
-    [cell.lat - cellSize / 5, cell.lng - cellSize / 5],
-    [cell.lat + cellSize / 5, cell.lng + cellSize / 5]
+    [cell.lat - cellSize / 0, cell.lng - cellSize / 0],
+    [cell.lat + cellSize / 0, cell.lng + cellSize / 0]
 ], {
     stroke: false, fillColor: col, fillOpacity: 0.35, interactive: false
 }).addTo(appState.mapInstance);
