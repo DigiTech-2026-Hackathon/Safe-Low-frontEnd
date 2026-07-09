@@ -88,12 +88,30 @@ function initRealMap() {
 
     renderRiskGrid();
     updateFavToggleUI();
+    
+    // 초기화 시 바텀 시트 상태에 맞춰 버튼 위치를 맞춤 분기 처리
+    const sheet = document.getElementById('main-bottom-sheet');
+    const geoBtn = document.getElementById('geo-btn');
+    if(sheet && geoBtn) {
+        if(sheet.classList.contains('collapsed')) {
+            geoBtn.classList.add('collapsed-state');
+        } else {
+            geoBtn.classList.remove('collapsed-state');
+        }
+    }
 }
 
 function toggleBottomSheet() {
     const sheet = document.getElementById('main-bottom-sheet');
-    if (sheet) {
+    const geoBtn = document.getElementById('geo-btn');
+    if (sheet && geoBtn) {
         sheet.classList.toggle('collapsed');
+        // 바텀 시트 움직임 트랜지션 베지에에 동기화하여 같이 움직이도록 처리
+        if (sheet.classList.contains('collapsed')) {
+            geoBtn.classList.add('collapsed-state');
+        } else {
+            geoBtn.classList.remove('collapsed-state');
+        }
     }
 }
 

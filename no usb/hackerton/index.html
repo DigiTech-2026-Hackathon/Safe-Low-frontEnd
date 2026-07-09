@@ -32,6 +32,8 @@
 
             <div class="map-area" id="map-canvas"></div>
 
+            <button class="btn-geolocation" id="geo-btn" onclick="tryGeoLocate()" title="현재 위치 확인">📍</button>
+
             <div class="bottom-sheet" id="main-bottom-sheet">
                 <div class="sheet-handle" onclick="toggleBottomSheet()"></div>
                 <div class="sheet-header">
@@ -65,8 +67,6 @@
                     <div id="history-list"></div>
                 </div>
             </div>
-
-            <button class="btn-geolocation" id="geo-btn" onclick="tryGeoLocate()" title="현재 위치 확인">📍</button>
         </div>
 
         <div id="view2" class="view-container">

@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://1ff8696206df6d.lhr.life/api/:path*" }
+    { "source": "/api/:path*", "destination": "https://story-bench-popularity-chosen.trycloudflare.com/api/:path*" }
   ]
 }
