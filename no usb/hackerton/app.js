@@ -57,12 +57,11 @@ function updateMapLayers(lat, lng, level, popupText) {
     if (!appState.mapInstance) return;
     const targetPos = [lat, lng];
 
-    // 마커 객체가 확실히 존재할 때만 팝업 조작
     if (appState.mapMarker) {
         appState.mapMarker.setLatLng(targetPos);
         if (popupText) {
             appState.mapMarker.bindPopup(popupText);
-            // 지도가 완전히 로드된 후 안정적으로 팝업을 열 수 있도록 보장
+            // 비동기 타이밍 이슈 방지를 위해 즉시 열지 않고 안정화 후 오픈
             setTimeout(() => {
                 if (appState.mapMarker && appState.mapInstance) {
                     appState.mapMarker.openPopup();
@@ -70,7 +69,6 @@ function updateMapLayers(lat, lng, level, popupText) {
             }, 100);
         }
     }
-    
     if (appState.mapCircle) {
         appState.mapCircle.setLatLng(targetPos);
         const col = getRiskColor(level);
@@ -114,7 +112,6 @@ function toggleBottomSheet() {
 }
 
 function syncGeolocationButtonPosition() {
-    // 인라인 스타일(.style.bottom)이 CSS 규칙을 방해하지 않도록 완전히 제거합니다.
     const geoBtn = document.getElementById('geo-btn');
     if (geoBtn) {
         geoBtn.style.bottom = '';
@@ -150,7 +147,7 @@ function tryGeoLocate() {
 }
 
 /**
- * [연동] GET /api/geocode 호출
+ * [연동 및 수정] GET /api/geocode 호출 후 자동으로 위험 분석(리포트)까지 갱신
  */
 async function handleSearch() {
     const inputEl = document.getElementById('map-search-input');
@@ -184,48 +181,42 @@ async function handleSearch() {
         appState.currentLat = geo.lat;
         appState.currentLng = geo.lng;
         appState.currentAddress = geo.address_road || geo.address_jibun || geo.address || keyword;
-        
-        // 검색된 새로운 위치 정보에 맞춰 기존 데이터 캐시들 초기화
         resetLocationBoundState();
 
         document.getElementById('sheet-title-addr').innerText = appState.currentAddress;
         updateFavToggleUI();
 
-        // [수정] 지도가 안전하게 존재할 때만 부드럽게 화면 이동 및 레이어 갱신
         if (appState.mapInstance) {
             appState.mapInstance.setView([appState.currentLat, appState.currentLng], 16);
             updateMapLayers(appState.currentLat, appState.currentLng, '안전', appState.currentAddress);
         }
 
-        // 주변 격자 데이터 리로드
+        // 주변 격자 지도 데이터 리로드
         renderRiskGrid();
-        
-        // [추가] 중요! 검색한 새로운 위치의 위험 분석 리포트(화면2 데이터)를 백엔드에 즉시 요청해 채워 넣음
+
+        // 검색 완료 후 즉시 해당 위치의 위험 분석 리포트 데이터 요청 및 뷰 갱신
         await loadReportApi();
 
-        showCustomModal('위치 매핑 완료', `'${appState.currentAddress}'로 이동되었으며 위험도 분석이 완료되었습니다.`);
+        showCustomModal('위치 매핑 완료', `'${appState.currentAddress}'로 이동되어 위험 분석 리포트가 업데이트되었습니다.`);
     } catch (error) {
-        console.error('검색 실행 중 오류 발생:', error);
-        showCustomModal('서버 오류', '위치 지오코딩 및 분석 중 오류가 발생했습니다.');
+        console.error(error);
+        showCustomModal('서버 오류', '위치 검색 및 분석 도중 서버 오류가 발생했습니다.');
     }
 }
 
 /**
  * POST /api/risk-score 공통 호출 헬퍼 (API 명세서 기준).
  * building_id가 유효하게 있으면 재계산, 없거나 0이면 lat/lng로 최초 조회.
- * 성공 시 appState(currentBuildingId/currentScoreId/currentLevel/lastFactors)를 갱신한다.
  */
 async function fetchRiskScore(rainfallScenario) {
     let body = {};
 
-    // 0, null, undefined, 빈 문자열 등을 모두 체크하여 유효한 building_id가 있을 때만 포함
     if (appState.currentBuildingId && appState.currentBuildingId !== 0) {
         body = { 
             building_id: appState.currentBuildingId, 
             rainfall_scenario: rainfallScenario 
         };
     } else {
-        // 빌딩 아이디가 없거나 0이면 완전히 제외하고 lat, lng만 요청
         body = { 
             lat: appState.currentLat, 
             lng: appState.currentLng, 
@@ -245,11 +236,9 @@ async function fetchRiskScore(rainfallScenario) {
         return { ok: false, notCovered: false, llmFailed: false };
     }
 
-    // 422 = 분석 불가 지역(데이터 미커버)
     if (response.status === 422) {
         return { ok: false, notCovered: true, llmFailed: false };
     }
-    // 503 = LLM 호출 실패
     if (response.status === 503) {
         return { ok: false, notCovered: false, llmFailed: true };
     }
@@ -267,7 +256,6 @@ async function fetchRiskScore(rainfallScenario) {
 
     const data = resJson.data;
 
-    // 백엔드에서 준 데이터가 없거나 0이면 null로 초기화하여 안전하게 방어
     appState.currentBuildingId = data.building?.building_id || null;
     if (appState.currentBuildingId === 0) appState.currentBuildingId = null;
 
@@ -297,6 +285,8 @@ async function loadReportApi() {
                 showCustomModal('백엔드 연결 실패', '백엔드 서버(/api)에 연결할 수 없습니다. 서버가 켜져 있는지, 외부에서 접속 가능한지 확인해 주세요.');
             } else if (result.llmFailed) {
                 showCustomModal('AI 분석 실패', 'AI 위험도 분석 서버 호출에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+            } else if (result.notCovered) {
+                showCustomModal('분석 불가 지역', '해당 구역은 침수 데이터가 수집되지 않은 미커버 구역입니다.');
             }
             return;
         }
@@ -306,8 +296,6 @@ async function loadReportApi() {
         mainContent.style.display = 'block';
 
         updateMapLayers(appState.currentLat, appState.currentLng, data.risk_level, appState.currentAddress);
-
-        // 상단 날씨 배너: risk-score 응답엔 특보 정보가 없어 /api/rainfall을 별도 호출
         loadWeatherBanner();
 
         const reportScoreEl = document.getElementById('api-report-score');
@@ -327,11 +315,8 @@ async function loadReportApi() {
         updatePhaseBarHighlight(data.risk_level);
         document.getElementById('api-report-summary').innerText = data.summary ? `"${data.summary}"` : "분석 완료";
 
-        // 요인 분해 데이터 리스트 렌더링
         renderFourFactors(data.factors || []);
 
-        // 명세서상 risk-score 응답엔 별도의 '종합 설명(full_desc)' 필드가 없어
-        // summary를 종합 설명 영역에도 재사용한다. 재시도 버튼은 숨김 처리.
         const retryBox = document.getElementById('llm-retry-box');
         const paragraphEl = document.getElementById('api-llm-full-paragraph');
         retryBox.style.display = 'none';
@@ -343,7 +328,6 @@ async function loadReportApi() {
         recalcGrade.innerText = data.risk_level;
         recalcGrade.style.color = getRiskColor(data.risk_level);
 
-        // 대피소: risk-score 응답엔 없어 /api/shelters를 별도 호출 (F-09, 경고/위험 단계에서만)
         loadShelters(data.risk_level);
 
     } catch (error) {
@@ -353,19 +337,25 @@ async function loadReportApi() {
     }
 }
 
+/**
+ * [버그 수정] 정의되지 않은 위험 단계가 들어올 때의 예외 처리 추가
+ */
 function updatePhaseBarHighlight(currentLevel) {
     document.querySelectorAll('.phase-chunk').forEach(chunk => {
         chunk.classList.remove('active');
     });
 
-    let targetClass = '.chunk-safe';
-    if (currentLevel === '주의') targetClass = '.chunk-watch';
+    let targetClass = null;
+    if (currentLevel === '안전') targetClass = '.chunk-safe';
+    else if (currentLevel === '주의') targetClass = '.chunk-watch';
     else if (currentLevel === '경고') targetClass = '.chunk-warn';
     else if (currentLevel === '위험') targetClass = '.chunk-danger';
 
-    const targetChunk = document.querySelector(targetClass);
-    if (targetChunk) {
-        targetChunk.classList.add('active');
+    if (targetClass) {
+        const targetChunk = document.querySelector(targetClass);
+        if (targetChunk) {
+            targetChunk.classList.add('active');
+        }
     }
 }
 
@@ -397,19 +387,18 @@ function retryLLMGeneration() {
 }
 
 /**
- * [연동] 화면3(시나리오 대응) 데이터 로드 — 강우량 변경 시 점수 재계산 + 대응 안내 재생성
+ * [연동] 화면3(시나리오 대응) 데이터 로드
  */
 async function loadResponseGuideApi() {
     document.getElementById('api-guide-addr').innerText = appState.currentAddress;
 
     try {
-        // 강우 시나리오 변경분을 먼저 risk-score에 반영해 점수/단계 및 score_id를 최신화
         const scoreResult = await fetchRiskScore(appState.currentRainfall);
         if (!scoreResult.ok) {
             if (scoreResult.backendUnreachable) {
-                showCustomModal('백엔드 연결 실패', '백엔드 서버(/api)에 연결할 수 없습니다. 서버가 켜져 있는지, 외부에서 접속 가능한지 확인해 주세요.');
+                showCustomModal('백엔드 연결 실패', '백엔드 서버(/api)에 연결할 수 없습니다.');
             } else if (scoreResult.llmFailed) {
-                showCustomModal('AI 분석 실패', 'AI 위험도 재계산에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+                showCustomModal('AI 분석 실패', 'AI 위험도 재계산에 실패했습니다.');
             } else if (scoreResult.notCovered) {
                 showCustomModal('분석 불가 지역', '해당 구역은 침수 분석 정보가 수집되지 않는 구역입니다.');
             }
@@ -422,7 +411,7 @@ async function loadResponseGuideApi() {
         recalcGrade.innerText = d.risk_level;
         recalcGrade.style.color = getRiskColor(d.risk_level);
 
-        if (!appState.currentScoreId) throw new Error('score_id 없음');
+        if (!appState.currentScoreId) return;
 
         const response = await fetch(`${BASE_URL}/response-guide`, {
             method: 'POST',
@@ -434,10 +423,10 @@ async function loadResponseGuideApi() {
             showCustomModal('AI 분석 실패', 'AI 대응 안내 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.');
             return;
         }
-        if (!response.ok) throw new Error('가이드 조회 실패');
+        if (!response.ok) return;
 
         const { json: resJson, backendUnreachable } = await safeParseJson(response);
-        if (backendUnreachable || !resJson || resJson.success === false) throw new Error('가이드 조회 실패');
+        if (backendUnreachable || !resJson || resJson.success === false) return;
         const data = resJson.data;
 
         const chip = document.getElementById('tier-chip');
@@ -448,8 +437,6 @@ async function loadResponseGuideApi() {
             chip.style.borderColor = getRiskColor(data.risk_level);
         }
 
-        // 명세서 response-guide 응답엔 기준(50mm) 대비 편차(rain_gap) 필드가 없어
-        // 슬라이더 기준값(50mm) 대비 편차를 프론트에서 직접 계산해 배지로 표시한다.
         const deltaBadge = document.getElementById('delta-badge');
         const rainGap = appState.currentRainfall - 50;
         if (rainGap !== 0) {
@@ -459,9 +446,6 @@ async function loadResponseGuideApi() {
             deltaBadge.style.display = 'none';
         }
 
-        // 명세서 response-guide는 사전 준비/대피 판단을 구분하지 않고 guides 배열 하나만 준다.
-        // '대피' 관련 키워드가 포함된 항목을 대피 판단 가이드로, 나머지를 사전 준비 가이드로 분류해
-        // S-03 화면 명세(사전 준비 카드 + 대피 판단 카드)를 재현한다.
         const { prep, evac } = splitGuidesByEvac(data.guides || []);
         renderChecklist('api-guide-list-prep', prep.length ? prep : (data.guides || []));
 
@@ -479,10 +463,6 @@ async function loadResponseGuideApi() {
     }
 }
 
-/**
- * response-guide의 flat한 guides 배열을 대피 관련 키워드 유무로 분류한다.
- * (백엔드가 prep/evac 카테고리를 분리해서 주지 않으므로 프론트에서 휴리스틱으로 구분)
- */
 function splitGuidesByEvac(guides) {
     const evacKeywords = ['대피', '이동하세요', '이동해', '대피소'];
     const prep = [];
@@ -513,7 +493,6 @@ function handleRainSlider(slider) {
     appState.currentRainfall = parseInt(slider.value);
     document.getElementById('rain-val').innerText = slider.value;
 
-    // 슬라이더 드래그 중 과도한 API 호출을 막기 위한 디바운스
     clearTimeout(rainDebounceTimer);
     rainDebounceTimer = setTimeout(loadResponseGuideApi, 300);
 }
@@ -535,23 +514,18 @@ function renderWeatherBanner(warningText) {
 }
 
 /**
- * [연동] GET /api/risk-map 호출로 지도 영역 격자 위험도를 한 번에 조회한다.
- * 규칙 기반 사전 계산값이라 LLM을 타지 않고 빠르며, risk-score처럼 "시범 구역
- * 등록 건물"로 커버리지가 제한되지 않는다(F-10 전용 엔드포인트).
+ * [연동] GET /api/risk-map 호출
  */
 async function renderRiskGrid() {
     if (!appState.mapInstance) return;
     appState.gridLayers.forEach(layer => appState.mapInstance.removeLayer(layer));
     appState.gridLayers = [];
 
-    // 검색이 연달아 일어날 경우, 늦게 도착한 이전 요청 결과가 최신 화면을 덮어쓰지 않도록
-    // 이번 렌더링 회차를 식별하는 토큰을 발급한다.
     const requestId = ++appState.gridRequestId;
-
     const centerLat = appState.currentLat;
     const centerLng = appState.currentLng;
-    const halfSpan = 0.0045; // 기존 3x3(0.003 간격) 격자와 비슷한 범위를 커버
-    const cellSize = 0.003;  // 명세서에 셀 크기가 명시돼 있지 않아 표시용으로 기존 크기 재사용
+    const halfSpan = 0.0045; 
+    const cellSize = 0.003;  
 
     try {
         const params = new URLSearchParams({
@@ -562,8 +536,6 @@ async function renderRiskGrid() {
         });
 
         const response = await fetch(`${BASE_URL}/risk-map?${params.toString()}`);
-
-        // 조회하는 동안 다른 위치 검색이 실행됐다면 이 결과는 폐기(구버전 렌더링 방지)
         if (requestId !== appState.gridRequestId) return;
 
         if (!response.ok) return;
@@ -589,8 +561,7 @@ async function renderRiskGrid() {
 }
 
 /**
- * [연동] GET /api/rainfall 호출로 현재 위치의 실시간 기상특보를 조회해
- * 상단 배너에 반영한다 (risk-score 응답엔 특보 정보가 없어 별도 호출 필요).
+ * [연동] GET /api/rainfall 호출
  */
 async function loadWeatherBanner() {
     try {
@@ -607,8 +578,7 @@ async function loadWeatherBanner() {
 }
 
 /**
- * [연동] GET /api/shelters 호출로 인근 대피소를 조회한다.
- * F-09 정책상 '경고' 이상 단계에서만 조회(risk-score 응답엔 대피소 정보가 없어 별도 호출).
+ * [연동] GET /api/shelters 호출
  */
 async function loadShelters(level) {
     if (level !== '경고' && level !== '위험') {
@@ -690,13 +660,9 @@ function setSheetTab(tabId) {
 }
 
 /**
- * [연동] GET /api/history 호출로 최근 조회 기록(risk_score 이력, 최신순)을 불러온다.
+ * [연동] GET /api/history 호출
  */
 async function loadHistoryApi() {
-    const listContainer = document.getElementById('history-list');
-    const emptyMsg = document.getElementById('history-empty-msg');
-    if (!listContainer) return;
-
     try {
         const params = new URLSearchParams({ limit: 20 });
         const response = await fetch(`${BASE_URL}/history?${params.toString()}`);
@@ -861,7 +827,7 @@ function getRiskColor(level) {
     if (level === '주의') return '#f59e0b';
     if (level === '경고') return '#f97316';
     if (level === '위험') return '#ef4444';
-    return '#94a3b8'; // 분석불가 / 알 수 없음
+    return '#94a3b8'; // 분석불가 / 알 수 없음(회색)
 }
 
 function switchView(viewId) {
