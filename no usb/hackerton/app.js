@@ -79,15 +79,7 @@ function toggleBottomSheet() {
     const sheet = document.getElementById('main-bottom-sheet');
     if (sheet) {
         sheet.classList.toggle('collapsed');
-        syncGeolocationButtonPosition();
-    }
-}
 
-function syncGeolocationButtonPosition() {
-    // 인라인 스타일(.style.bottom)이 CSS 규칙을 방해하지 않도록 완전히 제거합니다.
-    const geoBtn = document.getElementById('geo-btn');
-    if (geoBtn) {
-        geoBtn.style.bottom = '';
     }
 }
 
@@ -129,10 +121,10 @@ async function handleSearch() {
         return;
     }
 
-    const keyword = inputEl.value.trim();
+    const address = inputEl.value.trim();
 
     try {
-        const response = await fetch(`${BASE_URL}/geocode?keyword=${encodeURIComponent(keyword)}`);
+        const response = await fetch(`${BASE_URL}/geocode?address=${encodeURIComponent(address)}`);
         const resJson = await response.json();
 
         if (response.status === 404) {
@@ -150,7 +142,7 @@ async function handleSearch() {
 
         appState.currentLat = geo.lat;
         appState.currentLng = geo.lng;
-        appState.currentAddress = geo.address || keyword;
+        appState.currentAddress = geo.address || address;
         resetLocationBoundState();
 
         document.getElementById('sheet-title-addr').innerText = appState.currentAddress;
