@@ -494,12 +494,12 @@ async function renderRiskGrid() {
 
         cells.forEach(cell => {
             const col = getRiskColor(cell.risk_level);
-            const rect = L.rectangle([
-                [cell.lat - cellSize / 2, cell.lng - cellSize / 2],
-                [cell.lat + cellSize / 2, cell.lng + cellSize / 2]
-            ], {
-                color: col, weight: 1, fillColor: col, fillOpacity: 0.15, interactive: false
-            }).addTo(appState.mapInstance);
+           const rect = L.rectangle([
+    [cell.lat - cellSize / 2, cell.lng - cellSize / 2],
+    [cell.lat + cellSize / 2, cell.lng + cellSize / 2]
+], {
+    stroke: false, fillColor: col, fillOpacity: 0.35, interactive: false
+}).addTo(appState.mapInstance);
             appState.gridLayers.push(rect);
         });
     } catch (error) {
