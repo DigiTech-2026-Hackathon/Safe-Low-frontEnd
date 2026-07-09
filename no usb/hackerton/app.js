@@ -1,5 +1,7 @@
-// 백엔드 주소 (FastAPI). main.py가 frontend/를 같은 오리진에서 서빙하지만,
-// VSCode Live Server 등 별도 dev server로 index.html을 열 수도 있으므로 절대경로로 고정.
+// 백엔드 API 경로.
+// Vercel(HTTPS)에 배포된 프론트에서 HTTP 백엔드(http://222.110.147.56:5000)를 직접 호출하면
+// Mixed Content로 차단되므로, 절대경로 대신 같은 오리진의 상대경로 '/api'를 사용한다.
+// 실제 백엔드로의 전달은 vercel.json의 rewrites 설정이 처리한다 (same-origin 프록시).
 const BASE_URL = '/api';
 
 const FAV_STORAGE_KEY = 'flood_risk_favorites';
@@ -79,7 +81,15 @@ function toggleBottomSheet() {
     const sheet = document.getElementById('main-bottom-sheet');
     if (sheet) {
         sheet.classList.toggle('collapsed');
+        syncGeolocationButtonPosition();
+    }
+}
 
+function syncGeolocationButtonPosition() {
+    // 인라인 스타일(.style.bottom)이 CSS 규칙을 방해하지 않도록 완전히 제거합니다.
+    const geoBtn = document.getElementById('geo-btn');
+    if (geoBtn) {
+        geoBtn.style.bottom = '';
     }
 }
 
@@ -121,17 +131,20 @@ async function handleSearch() {
         return;
     }
 
-    const address = inputEl.value.trim();
+    const keyword = inputEl.value.trim();
 
     try {
-        const response = await fetch(`${BASE_URL}/geocode?address=${encodeURIComponent(address)}`);
+        const response = await fetch(`${BASE_URL}/geocode?address=${encodeURIComponent(keyword)}`);
         const resJson = await response.json();
 
         if (response.status === 404) {
             showCustomModal('검색 결과 없음', resJson.error?.message || '해당 주소/건물명을 찾을 수 없습니다.');
             return;
         }
-        if (!response.ok) throw new Error('서버 통신 실패');
+        if (!response.ok || resJson.success === false) {
+            showCustomModal('검색 실패', resJson.error?.message || '해당 주소/건물명을 찾을 수 없습니다.');
+            return;
+        }
 
         const geo = resJson.data;
 
@@ -142,7 +155,7 @@ async function handleSearch() {
 
         appState.currentLat = geo.lat;
         appState.currentLng = geo.lng;
-        appState.currentAddress = geo.address || address;
+        appState.currentAddress = geo.address_road || geo.address_jibun || geo.address || keyword;
         resetLocationBoundState();
 
         document.getElementById('sheet-title-addr').innerText = appState.currentAddress;
@@ -633,5 +646,3 @@ window.addEventListener('DOMContentLoaded', () => {
     initRealMap();
     tryGeoLocate();
 });
-
-//*푸시가 안돼서 쓰는 주석입니다 무시 해주세요
