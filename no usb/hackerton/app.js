@@ -193,17 +193,26 @@ async function handleSearch() {
 
 /**
  * POST /api/risk-score 공통 호출 헬퍼 (API 명세서 기준).
- * building_id가 있으면 재계산(find-or-create의 재계산 경로), 없으면 lat/lng로 최초 조회.
+ * building_id가 유효하게 있으면 재계산, 없거나 0이면 lat/lng로 최초 조회.
  * 성공 시 appState(currentBuildingId/currentScoreId/currentLevel/lastFactors)를 갱신한다.
- *
- * 응답 예:
- * { success:true, data:{ score_id, building:{building_id,...}, total_score, risk_level,
- *   rainfall_scenario, summary, factors:[{factor_type,contribution,description}], created_at } }
  */
 async function fetchRiskScore(rainfallScenario) {
-    const body = appState.currentBuildingId
-        ? { building_id: appState.currentBuildingId, rainfall_scenario: rainfallScenario }
-        : { lat: appState.currentLat, lng: appState.currentLng, rainfall_scenario: rainfallScenario };
+    let body = {};
+
+    // 0, null, undefined, 빈 문자열 등을 모두 체크하여 유효한 building_id가 있을 때만 포함
+    if (appState.currentBuildingId && appState.currentBuildingId !== 0) {
+        body = { 
+            building_id: appState.currentBuildingId, 
+            rainfall_scenario: rainfallScenario 
+        };
+    } else {
+        // 빌딩 아이디가 없거나 0이면 완전히 제외하고 lat, lng만 요청
+        body = { 
+            lat: appState.currentLat, 
+            lng: appState.currentLng, 
+            rainfall_scenario: rainfallScenario 
+        };
+    }
 
     let response;
     try {
@@ -239,7 +248,10 @@ async function fetchRiskScore(rainfallScenario) {
 
     const data = resJson.data;
 
-    appState.currentBuildingId = data.building?.building_id ?? null;
+    // 백엔드에서 준 데이터가 없거나 0이면 null로 초기화하여 안전하게 방어
+    appState.currentBuildingId = data.building?.building_id || null;
+    if (appState.currentBuildingId === 0) appState.currentBuildingId = null;
+
     appState.currentScoreId = data.score_id ?? null;
     appState.currentLevel = data.risk_level;
     appState.lastFactors = data.factors || [];
