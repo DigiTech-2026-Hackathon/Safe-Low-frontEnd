@@ -4,13 +4,14 @@ body, html { width: 100%; height: 100%; background-color: #f1f5f9; display: flex
 .phone-wrapper { width: 100%; max-width: 430px; height: 100%; max-height: 932px; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,0.1); position: relative; display: flex; flex-direction: column; overflow: hidden; }
 .view-container { width: 100%; height: 100%; display: none; flex-direction: column; position: relative; background: #f8fafc; }
 .view-container.active { display: flex; }
-.top-sticky-area { position: absolute; top: 0; left: 0; right: 0; z-index: 1000; padding: 12px; pointer-events: none; }
+.top-sticky-area { position: absolute; top: 0; left: 0; right: 0; z-index: 1000; padding: 12px; pointer-events: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.top-left-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .search-container { display: flex; gap: 8px; pointer-events: auto; background: rgba(255,255,255,0.95); padding: 6px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); backdrop-filter: blur(8px); }
-.search-bar { flex: 1; }
+.search-bar { flex: 1; min-width: 0; }
 .search-bar input { width: 100%; border: none; padding: 10px 12px; font-size: 14px; background: transparent; outline: none; }
-.btn-pin { background: #1e3a8a; color: #fff; border: none; padding: 0 16px; border-radius: 8px; font-weight: 500; cursor: pointer; font-size: 14px; }
-.alert-banner { pointer-events: auto; background: #ef4444; color: #fff; padding: 10px; border-radius: 8px; margin-top: 8px; font-size: 13px; font-weight: 500; text-align: center; box-shadow: 0 4px 10px rgba(239,68,68,0.2); animation: pulse 2s infinite; }
-.map-legend-v { pointer-events: auto; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 10px; position: absolute; top: 80px; right: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 6px; }
+.btn-pin { background: #1e3a8a; color: #fff; border: none; padding: 0 16px; border-radius: 8px; font-weight: 500; cursor: pointer; font-size: 14px; flex-shrink: 0; }
+.alert-banner { pointer-events: auto; background: #ef4444; color: #fff; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 500; text-align: center; box-shadow: 0 4px 10px rgba(239,68,68,0.2); animation: pulse 2s infinite; }
+.map-legend-v { pointer-events: auto; background: rgba(255,255,255,0.95); padding: 10px; border-radius: 10px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 6px; }
 .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: #475569; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .dot-safe { background: #10b981; }
@@ -19,7 +20,7 @@ body, html { width: 100%; height: 100%; background-color: #f1f5f9; display: flex
 .dot-danger { background: #ef4444; }
 .dot-none { background: #94a3b8; }
 .map-area { flex: 1; width: 100%; height: 100%; z-index: 1; }
-.bottom-sheet { position: absolute; bottom: 60px; left: 0; right: 0; background: #fff; border-top-left-radius: 20px; border-top-right-radius: 20px; box-shadow: 0 -4px 16px rgba(0,0,0,0.08); z-index: 100; max-height: 50%; display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); transform: translateY(0); }
+.bottom-sheet { position: absolute; bottom: 60px; /* 하단 메뉴바(.bottom-actions) 높이인 60px에 정확히 밀착 */left: 0; right: 0; background: #fff; border-top-left-radius: 20px; border-top-right-radius: 20px; box-shadow: 0 -4px 16px rgba(0,0,0,0.08); z-index: 100; max-height: 50%; display: flex; flex-direction: column; /* cubic-bezier를 app.js에서 동적 제어하기 편하도록 ease-in-out 변형 일치 */transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); transform: translateY(0); }
 .bottom-sheet.collapsed { transform: translateY(calc(100% - 54px)); }
 .sheet-handle { width: 40px; height: 4px; background: #cbd5e1; border-radius: 2px; margin: 8px auto; cursor: pointer; }
 .sheet-header { padding: 0 16px 10px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; }
@@ -34,8 +35,8 @@ body, html { width: 100%; height: 100%; background-color: #f1f5f9; display: flex
 .pane-desc { font-size: 13px; color: #475569; line-height: 1.5; margin-bottom: 14px; }
 .btn-primary-action { width: 100%; background: #1e3a8a; color: #fff; border: none; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 6px rgba(30,58,138,0.15); }
 .empty-text { font-size: 13px; color: #94a3b8; text-align: center; padding: 30px 0; line-height: 1.5; }
-.btn-geolocation { position: absolute; bottom: calc(50% + 76px); right: 16px; width: 44px; height: 44px; background: #fff; border: none; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.12); z-index: 1000; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); }
-.btn-geolocation.collapsed-state { transform: translateY(calc(50dvh - 114px)); }
+.btn-geolocation { position: absolute; /* 기본 상태(바텀시트가 올라왔을 때) 시트 바로 위인 bottom: 50% 위치에 배치 */bottom: 50%; right: 16px; width: 44px; height: 44px; background: #fff; border: none; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.12); z-index: 1000; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; /* 바텀시트와 완벽히 똑같은 타이밍으로 움직이도록 transition 매칭 */transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); transform: translateY(-12px); /* 바텀시트와의 최소 여백 유지 */}
+.btn-geolocation.collapsed-state { transform: translateY(0); }
 .app-header { background: #fff; padding: 16px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; z-index: 10; }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .back-arrow { font-size: 14px; color: #64748b; cursor: pointer; font-weight: 500; }
@@ -129,6 +130,8 @@ body, html { width: 100%; height: 100%; background-color: #f1f5f9; display: flex
 .fav-item-actions { display: flex; gap: 6px; }
 .btn-fav-goto { background: #e0f2fe; color: #0369a1; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .btn-fav-remove { background: #fee2e2; color: #ef4444; border: none; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.leaflet-div-icon.custom-shelter-icon { background: transparent; border: none; }
+.shelter-marker-pin { display: inline-block; white-space: nowrap; background: #16a34a; color: #fff; padding: 4px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; border: 1px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
 .shelter-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 10px; margin-bottom: 8px; }
 .shelter-name { font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 2px; }
 .shelter-addr { font-size: 12px; color: #64748b; line-height: 1.4; }

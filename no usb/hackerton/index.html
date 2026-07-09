@@ -13,14 +13,16 @@
 
         <div id="view1" class="view-container active">
             <div class="top-sticky-area">
-                <div class="search-container">
-                    <div class="search-bar">
-                        <input type="text" id="map-search-input" placeholder="시범 구역 주소 입력 (예: 신림로 100)">
+                <div class="top-left-col">
+                    <div class="search-container">
+                        <div class="search-bar">
+                            <input type="text" id="map-search-input" placeholder="시범 구역 주소 입력 (예: 신림로 100)">
+                        </div>
+                        <button class="btn-pin" onclick="handleSearch()">검색</button>
                     </div>
-                    <button class="btn-pin" onclick="handleSearch()">검색</button>
+                    <div class="alert-banner" id="weather-alert-banner" style="display: none;">기상 특보 발생</div>
                 </div>
-                <div class="alert-banner" id="weather-alert-banner" style="display: none;">기상 특보 발생</div>
-                
+
                 <div class="map-legend-v" id="risk-map-legend">
                     <div class="legend-item"><span class="legend-dot dot-safe"></span>안전</div>
                     <div class="legend-item"><span class="legend-dot dot-watch"></span>주의</div>

@@ -89,6 +89,13 @@ function initRealMap() {
     renderRiskGrid();
     updateFavToggleUI();
     
+    // 초기화 시 바텀 시트 상태에 맞추어 버튼 위치 실시간 동기화 호출
+    syncGeoButtonPosition();
+}
+
+    renderRiskGrid();
+    updateFavToggleUI();
+    
     // 초기화 시 바텀 시트 상태에 맞춰 버튼 위치를 맞춤 분기 처리
     const sheet = document.getElementById('main-bottom-sheet');
     const geoBtn = document.getElementById('geo-btn');
@@ -99,19 +106,13 @@ function initRealMap() {
             geoBtn.classList.remove('collapsed-state');
         }
     }
-}
 
 function toggleBottomSheet() {
     const sheet = document.getElementById('main-bottom-sheet');
-    const geoBtn = document.getElementById('geo-btn');
-    if (sheet && geoBtn) {
+    if (sheet) {
         sheet.classList.toggle('collapsed');
-        // 바텀 시트 움직임 트랜지션 베지에에 동기화하여 같이 움직이도록 처리
-        if (sheet.classList.contains('collapsed')) {
-            geoBtn.classList.add('collapsed-state');
-        } else {
-            geoBtn.classList.remove('collapsed-state');
-        }
+        // 시트 상태가 바뀔 때 버튼 위치 동기화
+        syncGeoButtonPosition();
     }
 }
 
@@ -448,8 +449,9 @@ function renderShelters(shelters) {
         const marker = L.marker([s.lat, s.lng], {
             icon: L.divIcon({
                 className: 'custom-shelter-icon',
-                html: `<div style="background:#16a34a; color:white; padding:4px 8px; border-radius:8px; font-size:10px; font-weight:bold; border:1px solid white; box-shadow:0 2px 6px rgba(0,0,0,0.2);">🏡 대피소</div>`,
-                iconAnchor: [30, 10]
+                html: `<div class="shelter-marker-pin">🏡 대피소</div>`,
+                iconSize: [64, 24],
+                iconAnchor: [32, 24]
             })
         }).addTo(appState.mapInstance).bindPopup(`<b>${s.shelter_name}</b><br>${s.address}`);
         appState.shelterMarkers.push(marker);
@@ -698,3 +700,21 @@ window.addEventListener('DOMContentLoaded', () => {
     initRealMap();
     tryGeoLocate();
 });
+
+function syncGeoButtonPosition() {
+    const sheet = document.getElementById('main-bottom-sheet');
+    const geoBtn = document.getElementById('geo-btn');
+    
+    if (!sheet || !geoBtn) return;
+    
+    if (sheet.classList.contains('collapsed')) {
+        // 바텀시트가 내려갔을 때: 버튼도 아래로 내려가서 접힌 시트 바로 위에 안착
+        // 시트 전체 높이에서 보여지는 54px를 뺀 만큼 내려가므로, 버튼은 그에 맞춰 이동
+        const sheetHeight = sheet.offsetHeight;
+        const moveDistance = sheetHeight - 54;
+        geoBtn.style.transform = `translateY(${moveDistance - 12}px)`;
+    } else {
+        // 바텀시트가 올라왔을 때: 기본 원래 위치(바텀시트 바로 위)로 복귀
+        geoBtn.style.transform = 'translateY(-12px)';
+    }
+}
