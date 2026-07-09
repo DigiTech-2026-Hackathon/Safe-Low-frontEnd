@@ -490,7 +490,7 @@ async function renderRiskGrid() {
         appState.gridLayers = [];
 
         const cells = resJson.data?.cells || [];
-        const cellSize = 0.0015;
+        const cellSize = 0.0017;
 
         cells.forEach(cell => {
             const col = getRiskColor(cell.risk_level);
