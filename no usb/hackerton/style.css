@@ -11,13 +11,13 @@ body, html { width: 100%; height: 100%; background-color: #f0f2f5; display: flex
 .btn-pin { padding: 0 18px; height: 48px; background: #007aff; border: none; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); color: white; font-size: 14px; font-weight: bold; cursor: pointer; }
 .map-area { flex: 1; width: 100%; background: #f4f4f4; z-index: 1; filter: contrast(1.01) saturate(0.95); }
 .map-area .leaflet-interactive { transition: fill 0.3s ease, stroke 0.3s ease; }
-.bottom-sheet { background: white; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 16px; box-shadow: 0 -6px 20px rgba(0,0,0,0.06); z-index: 1000; padding-bottom: 24px; max-height: 320px; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease; overflow: hidden; }
+.bottom-sheet { background: white; border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 16px; box-shadow: 0 -6px 20px rgba(0,0,0,0.06); shrink: 0; z-index: 1000; padding-bottom: 24px; max-height: 320px; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease; overflow: hidden; }
 .bottom-sheet.collapsed { max-height: 36px; padding-top: 14px; padding-bottom: 0px; }
 .sheet-handle { width: 42px; height: 6px; background: #cbd5e1; border-radius: 3px; margin: 0 auto 14px auto; cursor: pointer; }
 .sheet-header { margin-bottom: 8px; }
 .sheet-header h3 { font-size: 17px; font-weight: bold; color: #0f172a; }
 .btn-primary-action { width: 100%; background: #007aff; color: white; border: none; padding: 14px; border-radius: 12px; font-size: 14px; font-weight: bold; cursor: pointer; }
-.app-header { height: 60px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: #fff; z-index: 100; }
+.app-header { height: 60px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: #fff; shrink: 0; z-index: 100; }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .back-arrow { cursor: pointer; font-size: 14px; color: #007aff; font-weight: bold; }
 .header-subtitle { font-size: 12px; color: #64748b; margin-top: 2px; }
@@ -66,9 +66,9 @@ body, html { width: 100%; height: 100%; background-color: #f0f2f5; display: flex
 .action-title.title-danger { color: #b91c1c; }
 .action-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
 .chk-row { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
-.custom-chk { width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid #cbd5e1; cursor: pointer; accent-color: #007aff; margin-top: 1px; }
+.custom-chk { width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid #cbd5e1; cursor: pointer; accent-color: #007aff; margin-top: 1px; shrink: 0; }
 .chk-row label { font-size: 13px; color: #334155; line-height: 1.5; cursor: pointer; word-break: keep-all; }
-.bottom-actions { height: 68px; border-top: 1px solid #f1f5f9; display: flex; background: #fff; z-index: 100; }
+.bottom-actions { height: 68px; border-top: 1px solid #f1f5f9; display: flex; background: #fff; shrink: 0; z-index: 100; }
 .act-btn { flex: 1; background: none; border: none; font-size: 13px; font-weight: 600; color: #94a3b8; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: all 0.15s ease; }
 .act-btn.active.blue-text { color: #007aff; font-weight: bold; background: #f0f7ff; }
 .act-btn.active.red-text { color: #ef4444; font-weight: bold; background: #fef2f2; }
@@ -95,18 +95,13 @@ body, html { width: 100%; height: 100%; background-color: #f0f2f5; display: flex
 .shelter-name { font-size: 13px; font-weight: bold; color: #1e293b; }
 .shelter-addr { font-size: 11px; color: #64748b; margin: 2px 0 4px 0; }
 .shelter-capacity { font-size: 11px; color: #16a34a; font-weight: bold; }
-.history-item-row { padding: 10px; background: #f8fafc; border-radius: 10px; margin-bottom: 8px; border: 1px solid #e2e8f0; }
-.history-item-main { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.history-addr { font-size: 12px; color: #334155; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.history-level-badge { font-size: 10px; font-weight: bold; color: #fff; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
-.history-meta { font-size: 11px; color: #94a3b8; margin-top: 4px; }
 .fav-item-row { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #f8fafc; border-radius: 10px; margin-bottom: 8px; border: 1px solid #e2e8f0; }
 .fav-item-text { font-size: 12px; color: #334155; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
-.fav-item-actions { display: flex; gap: 4px;margin-left: 8px; }
+.fav-item-actions { display: flex; gap: 4px; shrink: 0; margin-left: 8px; }
 .btn-fav-goto, .btn-fav-remove { border: none; background: none; font-size: 11px; font-weight: bold; color: #007aff; cursor: pointer; padding: 4px 6px; }
 .btn-fav-remove { color: #ef4444; }
 .scroll-content { flex: 1; overflow-y: scroll; padding: 16px; background: #f8fafc; scroll-behavior: smooth; }
-.range-input { width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; outline: none; margin-bottom: 18px; transition: background 0.2s ease; }
+.range-input { width: 100%; -webkit-appearance: none; height: 6px; background: #e2e8f0; border-radius: 3px; outline: none; margin-bottom: 18px; transition: background 0.2s ease; }
 .range-input::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #007aff; cursor: pointer; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition: transform 0.15s ease, background-color 0.15s ease; }
 .range-input::-webkit-slider-thumb:active { transform: scale(1.15); }
 .range-input::-moz-range-thumb { width: 24px; height: 24px; border: 2px solid white; border-radius: 50%; background: #007aff; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
@@ -138,6 +133,6 @@ body, html { width: 100%; height: 100%; background-color: #f0f2f5; display: flex
 .retry-msg { font-size: 12px; color: #64748b; margin-bottom: 8px; }
 .retry-btn-container { text-align: center; margin-top: 4px; }
 .report-header-title { font-size: 16px; font-weight: bold; }
-.btn-geolocation { position: absolute; bottom: 240px; right: 14px; z-index: 1001; width: 44px; height: 44px; background: white; border: 1px solid #cbd5e1; border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.12); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: bottom 0.3s cubic-bezier(0.4,0,0.2,1), transform 0.1s, background-color 0.1s; }
+.btn-geolocation { position: absolute; bottom: 240px; right: 14px; z-index: 1001; width: 44px; height: 44px; background: white; border: 1px solid #cbd5e1; border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.12); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.1s, background-color 0.1s; }
 .bottom-sheet.collapsed ~ .btn-geolocation { bottom: 114px; }
 .btn-geolocation:active { transform: scale(0.95); background-color: #f1f5f9; }

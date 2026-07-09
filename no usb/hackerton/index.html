@@ -22,7 +22,6 @@
                 <div class="alert-banner" id="weather-alert-banner" style="display: none;">호우경보 활성화</div>
                 
                 <div class="map-legend-v" id="risk-map-legend">
-                    
                     <div class="legend-item"><span class="legend-dot dot-safe"></span>안전</div>
                     <div class="legend-item"><span class="legend-dot dot-watch"></span>주의</div>
                     <div class="legend-item"><span class="legend-dot dot-warn"></span>경고</div>
@@ -43,7 +42,6 @@
                     <div class="sheet-tab active" id="tab-info" onclick="setSheetTab('info')">위험도 확인</div>
                     <div class="sheet-tab" id="tab-shelter" onclick="setSheetTab('shelter')">인근 대피소</div>
                     <div class="sheet-tab" id="tab-fav" onclick="setSheetTab('fav')">관심 위치</div>
-                    <div class="sheet-tab" id="tab-history" onclick="setSheetTab('history')">조회 이력</div>
                 </div>
 
                 <div class="sheet-pane active" id="pane-info">
@@ -59,11 +57,6 @@
                 <div class="sheet-pane" id="pane-fav">
                     <div id="fav-empty-msg" class="empty-text">저장된 관심 위치가 없습니다.</div>
                     <div id="fav-list"></div>
-                </div>
-
-                <div class="sheet-pane" id="pane-history">
-                    <div id="history-empty-msg" class="empty-text">조회 이력이 없습니다.</div>
-                    <div id="history-list"></div>
                 </div>
             </div>
 

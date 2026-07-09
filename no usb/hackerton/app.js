@@ -1,8 +1,6 @@
-// 백엔드 API 경로.
-// Vercel(HTTPS)에 배포된 프론트에서 HTTP 백엔드(http://222.110.147.56:5000)를 직접 호출하면
-// Mixed Content로 차단되므로, 절대경로 대신 같은 오리진의 상대경로 '/api'를 사용한다.
-// 실제 백엔드로의 전달은 vercel.json의 rewrites 설정이 처리한다 (same-origin 프록시).
-const BASE_URL = '/api';
+// 백엔드 주소 (FastAPI). main.py가 frontend/를 같은 오리진에서 서빙하지만,
+// VSCode Live Server 등 별도 dev server로 index.html을 열 수도 있으므로 절대경로로 고정.
+const BASE_URL = 'http://localhost:8000/api';
 
 const FAV_STORAGE_KEY = 'flood_risk_favorites';
 
@@ -11,33 +9,16 @@ const appState = {
     currentLng: 126.9294,
     currentAddress: '서울 관악구 신림동 100',
     currentRainfall: 50,
-    currentLevel: '안전',       // 실시간 위험 단계(risk_level) 저장용
+    currentLevel: '안전',       // 실시간 위험 단계 저장용
     currentBuildingId: null,   // risk-score find-or-create 결과 재사용 (재계산 시 lat/lng 대신 사용)
-    currentScoreId: null,      // 최근 risk-score의 score_id (response-guide 호출 시 필수)
-    lastFactors: [],           // 최근 risk-score 요인분해 결과
+    lastFactors: [],           // 최근 risk-score 요인분해 결과 (response-guide 컨텍스트로 재사용)
     mapInstance: null,
     mapMarker: null,
     mapCircle: null,
     shelterMarkers: [],
     gridLayers: [],
-    gridRequestId: 0
+    isLlmFailedMode: false
 };
-
-/**
- * fetch 응답을 JSON으로 안전하게 파싱한다.
- * 백엔드가 502/504 등으로 죽어있으면 Vercel이 JSON이 아닌 HTML/텍스트 에러 페이지를
- * 대신 내려주는데, 이때 response.json()이 SyntaxError를 던지며 콘솔에 원인이 불분명한
- * 에러만 남는다. 이 헬퍼로 그 경우를 "백엔드 연결 실패"로 명확히 구분한다.
- */
-async function safeParseJson(response) {
-    const text = await response.text();
-    try {
-        return { json: JSON.parse(text), backendUnreachable: false };
-    } catch (e) {
-        console.error('JSON 파싱 실패 (백엔드가 응답하지 않음/프록시 오류로 추정):', text.slice(0, 200));
-        return { json: null, backendUnreachable: true };
-    }
-}
 
 // 알림 모달 제어
 function showCustomModal(title, message) {
@@ -58,16 +39,7 @@ function updateMapLayers(lat, lng, level, popupText) {
     const targetPos = [lat, lng];
 
     if (appState.mapMarker) {
-        appState.mapMarker.setLatLng(targetPos);
-        if (popupText) {
-            appState.mapMarker.bindPopup(popupText);
-            // 비동기 타이밍 이슈 방지를 위해 즉시 열지 않고 안정화 후 오픈
-            setTimeout(() => {
-                if (appState.mapMarker && appState.mapInstance) {
-                    appState.mapMarker.openPopup();
-                }
-            }, 100);
-        }
+        appState.mapMarker.setLatLng(targetPos).bindPopup(popupText).openPopup();
     }
     if (appState.mapCircle) {
         appState.mapCircle.setLatLng(targetPos);
@@ -112,17 +84,18 @@ function toggleBottomSheet() {
 }
 
 function syncGeolocationButtonPosition() {
+    // 인라인 스타일(.style.bottom)이 CSS 규칙을 방해하지 않도록 완전히 제거합니다.
     const geoBtn = document.getElementById('geo-btn');
     if (geoBtn) {
         geoBtn.style.bottom = '';
     }
 }
 
-// 위치가 바뀔 때마다 이전 위치의 building_id/score_id/요인 캐시를 초기화
+// 위치가 바뀔 때마다 이전 위치의 building_id/요인 캐시를 초기화
 function resetLocationBoundState() {
     appState.currentBuildingId = null;
-    appState.currentScoreId = null;
     appState.lastFactors = [];
+    appState.isLlmFailedMode = false;
 }
 
 function tryGeoLocate() {
@@ -147,7 +120,7 @@ function tryGeoLocate() {
 }
 
 /**
- * [연동 및 수정] GET /api/geocode 호출 후 자동으로 위험 분석(리포트)까지 갱신
+ * [연동] GET /api/geocode 호출
  */
 async function handleSearch() {
     const inputEl = document.getElementById('map-search-input');
@@ -159,28 +132,25 @@ async function handleSearch() {
     const keyword = inputEl.value.trim();
 
     try {
-        const response = await fetch(`${BASE_URL}/geocode?address=${encodeURIComponent(keyword)}`);
-        const { json: resJson, backendUnreachable } = await safeParseJson(response);
-
-        if (backendUnreachable) {
-            showCustomModal('백엔드 연결 실패', '백엔드 서버(/api)에 연결할 수 없습니다. 서버가 켜져 있는지, 외부에서 접속 가능한지 확인해 주세요.');
-            return;
-        }
+        const response = await fetch(`${BASE_URL}/geocode?keyword=${encodeURIComponent(keyword)}`);
+        const resJson = await response.json();
 
         if (response.status === 404) {
             showCustomModal('검색 결과 없음', resJson.error?.message || '해당 주소/건물명을 찾을 수 없습니다.');
             return;
         }
-        if (!response.ok || resJson.success === false) {
-            showCustomModal('검색 실패', resJson.error?.message || '해당 주소/건물명을 찾을 수 없습니다.');
-            return;
-        }
+        if (!response.ok) throw new Error('서버 통신 실패');
 
         const geo = resJson.data;
 
+        if (geo.is_valid === false) {
+            showCustomModal('분석 불가 지역', '해당 구역은 침수 분석 정보가 수집되지 않는 구역입니다.');
+            return;
+        }
+
         appState.currentLat = geo.lat;
         appState.currentLng = geo.lng;
-        appState.currentAddress = geo.address_road || geo.address_jibun || geo.address || keyword;
+        appState.currentAddress = geo.address || keyword;
         resetLocationBoundState();
 
         document.getElementById('sheet-title-addr').innerText = appState.currentAddress;
@@ -191,77 +161,44 @@ async function handleSearch() {
             updateMapLayers(appState.currentLat, appState.currentLng, '안전', appState.currentAddress);
         }
 
-        // 주변 격자 지도 데이터 리로드
         renderRiskGrid();
-
-        // 검색 완료 후 즉시 해당 위치의 위험 분석 리포트 데이터 요청 및 뷰 갱신
-        await loadReportApi();
-
-        showCustomModal('위치 매핑 완료', `'${appState.currentAddress}'로 이동되어 위험 분석 리포트가 업데이트되었습니다.`);
+        showCustomModal('위치 매핑 완료', `'${appState.currentAddress}'로 이동되었습니다. 아래에서 리포트를 확인하세요.`);
     } catch (error) {
         console.error(error);
-        showCustomModal('서버 오류', '위치 검색 및 분석 도중 서버 오류가 발생했습니다.');
+        showCustomModal('서버 오류', '위치 지오코딩 중 서버 오류가 발생했습니다.');
     }
 }
 
 /**
- * POST /api/risk-score 공통 호출 헬퍼 (API 명세서 기준).
- * building_id가 유효하게 있으면 재계산, 없거나 0이면 lat/lng로 최초 조회.
+ * POST /api/risk-score 공통 호출 헬퍼.
+ * building_id가 있으면 재계산(find-or-create의 재계산 경로), 없으면 lat/lng로 최초 조회.
+ * 성공 시 appState(currentBuildingId/currentLevel/lastFactors)를 갱신한다.
  */
-async function fetchRiskScore(rainfallScenario) {
-    let body = {};
+async function fetchRiskScore(rainfall) {
+    const body = appState.currentBuildingId
+        ? { building_id: appState.currentBuildingId, rainfall }
+        : { lat: appState.currentLat, lng: appState.currentLng, address: appState.currentAddress, rainfall };
 
-    if (appState.currentBuildingId && appState.currentBuildingId !== 0) {
-        body = { 
-            building_id: appState.currentBuildingId, 
-            rainfall_scenario: rainfallScenario 
-        };
-    } else {
-        body = { 
-            lat: appState.currentLat, 
-            lng: appState.currentLng, 
-            rainfall_scenario: rainfallScenario 
-        };
-    }
-
-    let response;
-    try {
-        response = await fetch(`${BASE_URL}/risk-score`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
-    } catch (error) {
-        console.error('risk-score 통신 실패:', error);
-        return { ok: false, notCovered: false, llmFailed: false };
-    }
+    const response = await fetch(`${BASE_URL}/risk-score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
 
     if (response.status === 422) {
-        return { ok: false, notCovered: true, llmFailed: false };
-    }
-    if (response.status === 503) {
-        return { ok: false, notCovered: false, llmFailed: true };
+        return { ok: false, notCovered: true };
     }
     if (!response.ok) {
-        return { ok: false, notCovered: false, llmFailed: false };
+        return { ok: false, notCovered: false };
     }
 
-    const { json: resJson, backendUnreachable } = await safeParseJson(response);
-    if (backendUnreachable || !resJson) {
-        return { ok: false, notCovered: false, llmFailed: false, backendUnreachable: true };
-    }
-    if (resJson.success === false) {
-        return { ok: false, notCovered: false, llmFailed: false };
-    }
-
+    const resJson = await response.json();
     const data = resJson.data;
 
-    appState.currentBuildingId = data.building?.building_id || null;
-    if (appState.currentBuildingId === 0) appState.currentBuildingId = null;
-
-    appState.currentScoreId = data.score_id ?? null;
-    appState.currentLevel = data.risk_level;
+    appState.currentBuildingId = data.building_id;
+    appState.currentLevel = data.level;
     appState.lastFactors = data.factors || [];
+    appState.isLlmFailedMode = !!data.llm_failed;
 
     return { ok: true, data };
 }
@@ -281,13 +218,6 @@ async function loadReportApi() {
         if (!result.ok) {
             errorCard.style.display = 'block';
             mainContent.style.display = 'none';
-            if (result.backendUnreachable) {
-                showCustomModal('백엔드 연결 실패', '백엔드 서버(/api)에 연결할 수 없습니다. 서버가 켜져 있는지, 외부에서 접속 가능한지 확인해 주세요.');
-            } else if (result.llmFailed) {
-                showCustomModal('AI 분석 실패', 'AI 위험도 분석 서버 호출에 실패했습니다. 잠시 후 다시 시도해 주세요.');
-            } else if (result.notCovered) {
-                showCustomModal('분석 불가 지역', '해당 구역은 침수 데이터가 수집되지 않은 미커버 구역입니다.');
-            }
             return;
         }
 
@@ -295,40 +225,50 @@ async function loadReportApi() {
         errorCard.style.display = 'none';
         mainContent.style.display = 'block';
 
-        updateMapLayers(appState.currentLat, appState.currentLng, data.risk_level, appState.currentAddress);
-        loadWeatherBanner();
+        updateMapLayers(appState.currentLat, appState.currentLng, data.level, appState.currentAddress);
+
+        // 상단 날씨 배너 연동 (특보 정보가 있을 시)
+        renderWeatherBanner(data.warning || null);
 
         const reportScoreEl = document.getElementById('api-report-score');
-        setTextWithPulse(reportScoreEl, data.total_score);
+        setTextWithPulse(reportScoreEl, data.score);
 
         const gradeEl = document.getElementById('api-report-grade');
-        gradeEl.innerText = data.risk_level;
-        gradeEl.style.color = getRiskColor(data.risk_level);
+        gradeEl.innerText = data.level;
+        gradeEl.style.color = getRiskColor(data.level);
 
         const gaugeBar = document.getElementById('api-gauge-bar');
         if (gaugeBar) {
-            const angle = -45 + (data.total_score * 1.8);
-            gaugeBar.style.borderColor = getRiskColor(data.risk_level);
+            const angle = -45 + (data.score * 1.8);
+            gaugeBar.style.borderColor = getRiskColor(data.level);
             gaugeBar.style.transform = `rotate(${angle}deg)`;
         }
 
-        updatePhaseBarHighlight(data.risk_level);
+        updatePhaseBarHighlight(data.level);
         document.getElementById('api-report-summary').innerText = data.summary ? `"${data.summary}"` : "분석 완료";
 
+        // 요인 분해 데이터 리스트 렌더링
         renderFourFactors(data.factors || []);
 
         const retryBox = document.getElementById('llm-retry-box');
         const paragraphEl = document.getElementById('api-llm-full-paragraph');
-        retryBox.style.display = 'none';
-        paragraphEl.innerText = data.summary || "";
+
+        if (data.llm_failed || !data.full_desc) {
+            retryBox.style.display = 'block';
+            paragraphEl.innerText = "";
+        } else {
+            retryBox.style.display = 'none';
+            paragraphEl.innerText = data.full_desc;
+        }
 
         const recalcScoreEl = document.getElementById('api-recalc-score');
-        setTextWithPulse(recalcScoreEl, data.total_score);
+        setTextWithPulse(recalcScoreEl, data.score);
         const recalcGrade = document.getElementById('api-recalc-grade');
-        recalcGrade.innerText = data.risk_level;
-        recalcGrade.style.color = getRiskColor(data.risk_level);
+        recalcGrade.innerText = data.level;
+        recalcGrade.style.color = getRiskColor(data.level);
 
-        loadShelters(data.risk_level);
+        // 구현 제외 부가기능(F-09 대피소)이지만 프론트 안전성을 위해 빈 배열 처리
+        renderShelters(data.level, data.shelters || []);
 
     } catch (error) {
         console.error(error);
@@ -337,25 +277,19 @@ async function loadReportApi() {
     }
 }
 
-/**
- * [버그 수정] 정의되지 않은 위험 단계가 들어올 때의 예외 처리 추가
- */
 function updatePhaseBarHighlight(currentLevel) {
     document.querySelectorAll('.phase-chunk').forEach(chunk => {
         chunk.classList.remove('active');
     });
 
-    let targetClass = null;
-    if (currentLevel === '안전') targetClass = '.chunk-safe';
-    else if (currentLevel === '주의') targetClass = '.chunk-watch';
+    let targetClass = '.chunk-safe';
+    if (currentLevel === '주의') targetClass = '.chunk-watch';
     else if (currentLevel === '경고') targetClass = '.chunk-warn';
     else if (currentLevel === '위험') targetClass = '.chunk-danger';
 
-    if (targetClass) {
-        const targetChunk = document.querySelector(targetClass);
-        if (targetChunk) {
-            targetChunk.classList.add('active');
-        }
+    const targetChunk = document.querySelector(targetClass);
+    if (targetChunk) {
+        targetChunk.classList.add('active');
     }
 }
 
@@ -364,18 +298,16 @@ function renderFourFactors(factors) {
     if (!listContainer || !factors) return;
 
     listContainer.innerHTML = factors.map(f => {
-        const contribution = f.contribution ?? 0;
-        const barLevel = contribution > 30 ? '위험' : contribution > 15 ? '경고' : '안전';
         return `
             <div class="factor-card">
                 <div class="factor-header">
-                    <span class="factor-title">점수 요인: ${f.factor_type}</span>
-                    <span class="factor-meta">기여도 <span class="factor-percent-highlight">${contribution}%</span></span>
+                    <span class="factor-title">점수 요인: ${f.name}</span>
+                    <span class="factor-meta">기여도 <span class="factor-percent-highlight">${f.percent}%</span> | 요인 스코어: <strong>${f.score}점</strong></span>
                 </div>
                 <div class="factor-bar-bg">
-                    <div class="factor-bar-fill" style="width: ${contribution}%; background: ${getRiskColor(barLevel)};"></div>
+                    <div class="factor-bar-fill" style="width: ${f.score}%; background: ${getRiskColor(f.score > 70 ? '위험' : f.score > 40 ? '경고' : '안전')};"></div>
                 </div>
-                <div class="factor-desc"><strong>AI 설명:</strong> ${f.description}</div>
+                <div class="factor-desc"><strong>AI 설명:</strong> ${f.desc}</div>
             </div>
         `;
     }).join('');
@@ -387,73 +319,60 @@ function retryLLMGeneration() {
 }
 
 /**
- * [연동] 화면3(시나리오 대응) 데이터 로드
+ * [연동] 화면3(시나리오 대응) 데이터 로드 — 강우량 변경 시 점수 재계산 + 대응 안내 재생성
  */
 async function loadResponseGuideApi() {
     document.getElementById('api-guide-addr').innerText = appState.currentAddress;
 
     try {
+        // 강우 시나리오 변경분을 먼저 risk-score에 반영해 점수/단계를 최신화
         const scoreResult = await fetchRiskScore(appState.currentRainfall);
-        if (!scoreResult.ok) {
-            if (scoreResult.backendUnreachable) {
-                showCustomModal('백엔드 연결 실패', '백엔드 서버(/api)에 연결할 수 없습니다.');
-            } else if (scoreResult.llmFailed) {
-                showCustomModal('AI 분석 실패', 'AI 위험도 재계산에 실패했습니다.');
-            } else if (scoreResult.notCovered) {
-                showCustomModal('분석 불가 지역', '해당 구역은 침수 분석 정보가 수집되지 않는 구역입니다.');
-            }
-            return;
+        if (scoreResult.ok) {
+            const d = scoreResult.data;
+            setTextWithPulse(document.getElementById('api-recalc-score'), d.score);
+            const recalcGrade = document.getElementById('api-recalc-grade');
+            recalcGrade.innerText = d.level;
+            recalcGrade.style.color = getRiskColor(d.level);
         }
-
-        const d = scoreResult.data;
-        setTextWithPulse(document.getElementById('api-recalc-score'), d.total_score);
-        const recalcGrade = document.getElementById('api-recalc-grade');
-        recalcGrade.innerText = d.risk_level;
-        recalcGrade.style.color = getRiskColor(d.risk_level);
-
-        if (!appState.currentScoreId) return;
 
         const response = await fetch(`${BASE_URL}/response-guide`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ score_id: appState.currentScoreId })
+            body: JSON.stringify({
+                level: appState.currentLevel,
+                rainfall: appState.currentRainfall,
+                address: appState.currentAddress,
+                factors: appState.lastFactors.map(f => ({ factor_type: f.factor_type, score: f.score }))
+            })
         });
 
-        if (response.status === 503) {
-            showCustomModal('AI 분석 실패', 'AI 대응 안내 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.');
-            return;
-        }
-        if (!response.ok) return;
-
-        const { json: resJson, backendUnreachable } = await safeParseJson(response);
-        if (backendUnreachable || !resJson || resJson.success === false) return;
+        if (!response.ok) throw new Error('가이드 조회 실패');
+        const resJson = await response.json();
         const data = resJson.data;
 
         const chip = document.getElementById('tier-chip');
         if (chip) {
-            chip.innerText = `${data.risk_level} 단계 행동 요령`;
+            chip.innerText = `${appState.currentLevel} 단계 행동 요령`;
             chip.style.color = '#fff';
-            chip.style.background = getRiskColor(data.risk_level);
-            chip.style.borderColor = getRiskColor(data.risk_level);
+            chip.style.background = getRiskColor(appState.currentLevel);
+            chip.style.borderColor = getRiskColor(appState.currentLevel);
         }
 
+        // 기준(50mm) 대비 가변 편차 배지 처리
         const deltaBadge = document.getElementById('delta-badge');
-        const rainGap = appState.currentRainfall - 50;
-        if (rainGap !== 0) {
-            deltaBadge.innerText = rainGap > 0 ? `기준 대비 +${rainGap}mm` : `기준 대비 ${rainGap}mm`;
+        if (data.rain_gap && Math.abs(data.rain_gap) > 0) {
+            deltaBadge.innerText = data.rain_gap > 0 ? `기준 대비 +${data.rain_gap}mm` : `기준 대비 ${data.rain_gap}mm`;
             deltaBadge.style.display = 'inline-block';
         } else {
             deltaBadge.style.display = 'none';
         }
 
-        const { prep, evac } = splitGuidesByEvac(data.guides || []);
-        renderChecklist('api-guide-list-prep', prep.length ? prep : (data.guides || []));
+        renderChecklist('api-guide-list-prep', data.prep_rules || []);
 
         const evacBox = document.getElementById('evac-guide-box');
-        const isHighRisk = d.risk_level === '경고' || d.risk_level === '위험';
-        if (isHighRisk && evac.length > 0) {
-            renderChecklist('api-guide-list-evac', evac);
+        if (appState.currentLevel === '경고' || appState.currentLevel === '위험') {
             evacBox.style.display = 'block';
+            renderChecklist('api-guide-list-evac', data.evac_rules || []);
         } else {
             evacBox.style.display = 'none';
         }
@@ -461,20 +380,6 @@ async function loadResponseGuideApi() {
     } catch (error) {
         console.error(error);
     }
-}
-
-function splitGuidesByEvac(guides) {
-    const evacKeywords = ['대피', '이동하세요', '이동해', '대피소'];
-    const prep = [];
-    const evac = [];
-    guides.forEach(g => {
-        if (evacKeywords.some(k => g.includes(k))) {
-            evac.push(g);
-        } else {
-            prep.push(g);
-        }
-    });
-    return { prep, evac };
 }
 
 function renderChecklist(elementId, items) {
@@ -493,6 +398,7 @@ function handleRainSlider(slider) {
     appState.currentRainfall = parseInt(slider.value);
     document.getElementById('rain-val').innerText = slider.value;
 
+    // 슬라이더 드래그 중 과도한 API 호출을 막기 위한 디바운스
     clearTimeout(rainDebounceTimer);
     rainDebounceTimer = setTimeout(loadResponseGuideApi, 300);
 }
@@ -513,89 +419,33 @@ function renderWeatherBanner(warningText) {
     }
 }
 
-/**
- * [연동] GET /api/risk-map 호출
- */
-async function renderRiskGrid() {
+function renderRiskGrid() {
     if (!appState.mapInstance) return;
     appState.gridLayers.forEach(layer => appState.mapInstance.removeLayer(layer));
     appState.gridLayers = [];
 
-    const requestId = ++appState.gridRequestId;
     const centerLat = appState.currentLat;
     const centerLng = appState.currentLng;
-    const halfSpan = 0.0045; 
-    const cellSize = 0.003;  
+    const step = 0.003;
 
-    try {
-        const params = new URLSearchParams({
-            min_lat: centerLat - halfSpan,
-            min_lng: centerLng - halfSpan,
-            max_lat: centerLat + halfSpan,
-            max_lng: centerLng + halfSpan
-        });
+    for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+            const lat1 = centerLat + (i * step) - (step / 2);
+            const lng1 = centerLng + (j * step) - (step / 2);
+            const lat2 = lat1 + step;
+            const lng2 = lng1 + step;
 
-        const response = await fetch(`${BASE_URL}/risk-map?${params.toString()}`);
-        if (requestId !== appState.gridRequestId) return;
+            let gridLevel = '주의';
+            if (i + j === 0) gridLevel = '주의';
+            else if ((i + j) % 2 === 0) gridLevel = '안전';
 
-        if (!response.ok) return;
-        const resJson = await response.json();
-        if (resJson.success === false) return;
-
-        const cells = resJson.data?.cells || [];
-
-        cells.forEach(cell => {
-            const col = getRiskColor(cell.risk_level);
-            const rect = L.rectangle([
-                [cell.lat - cellSize / 2, cell.lng - cellSize / 2],
-                [cell.lat + cellSize / 2, cell.lng + cellSize / 2]
-            ], {
-                color: col, weight: 1, fillColor: col, fillOpacity: 0.15
+            const col = getRiskColor(gridLevel);
+            const rect = L.rectangle([[lat1, lng1], [lat2, lng2]], {
+                color: col, weight: 1, fillColor: col, fillOpacity: 0.08
             }).addTo(appState.mapInstance);
 
             appState.gridLayers.push(rect);
-        });
-    } catch (error) {
-        console.error('격자 위험도 조회 실패:', error);
-    }
-}
-
-/**
- * [연동] GET /api/rainfall 호출
- */
-async function loadWeatherBanner() {
-    try {
-        const params = new URLSearchParams({ lat: appState.currentLat, lng: appState.currentLng });
-        const response = await fetch(`${BASE_URL}/rainfall?${params.toString()}`);
-        if (!response.ok) { renderWeatherBanner(null); return; }
-        const resJson = await response.json();
-        if (resJson.success === false) { renderWeatherBanner(null); return; }
-        renderWeatherBanner(resJson.data?.warning_level || null);
-    } catch (error) {
-        console.error('강우 특보 조회 실패:', error);
-        renderWeatherBanner(null);
-    }
-}
-
-/**
- * [연동] GET /api/shelters 호출
- */
-async function loadShelters(level) {
-    if (level !== '경고' && level !== '위험') {
-        renderShelters(level, []);
-        return;
-    }
-    try {
-        const params = new URLSearchParams({ lat: appState.currentLat, lng: appState.currentLng });
-        const response = await fetch(`${BASE_URL}/shelters?${params.toString()}`);
-        if (response.status === 404) { renderShelters(level, []); return; }
-        if (!response.ok) { renderShelters(level, []); return; }
-        const resJson = await response.json();
-        if (resJson.success === false) { renderShelters(level, []); return; }
-        renderShelters(level, resJson.data?.shelters || []);
-    } catch (error) {
-        console.error('대피소 조회 실패:', error);
-        renderShelters(level, []);
+        }
     }
 }
 
@@ -622,7 +472,7 @@ function renderShelters(currentLevel, shelters) {
                 html: `<div style="background:#16a34a; color:white; padding:4px 8px; border-radius:8px; font-size:10px; font-weight:bold; white-space:nowrap; border:1px solid white; box-shadow:0 2px 6px rgba(0,0,0,0.2);">🏡 대피소</div>`,
                 iconAnchor: [30, 10]
             })
-        }).addTo(appState.mapInstance).bindPopup(`<b>${s.shelter_name}</b><br>${s.address}`);
+        }).addTo(appState.mapInstance).bindPopup(`<b>${s.name}</b><br>${s.address}`);
 
         appState.shelterMarkers.push(marker);
     });
@@ -630,7 +480,7 @@ function renderShelters(currentLevel, shelters) {
     if (listContainer) {
         listContainer.innerHTML = shelters.map(s => `
             <div class="shelter-card">
-                <div class="shelter-name">🏡 ${s.shelter_name}</div>
+                <div class="shelter-name">🏡 ${s.name}</div>
                 <div class="shelter-addr">${s.address}</div>
             </div>
         `).join('');
@@ -652,60 +502,7 @@ function setSheetTab(tabId) {
         document.getElementById('tab-fav').classList.add('active');
         document.getElementById('pane-fav').classList.add('active');
         renderFavoritesList();
-    } else if (tabId === 'history') {
-        document.getElementById('tab-history').classList.add('active');
-        document.getElementById('pane-history').classList.add('active');
-        loadHistoryApi();
     }
-}
-
-/**
- * [연동] GET /api/history 호출
- */
-async function loadHistoryApi() {
-    try {
-        const params = new URLSearchParams({ limit: 20 });
-        const response = await fetch(`${BASE_URL}/history?${params.toString()}`);
-        const { json: resJson, backendUnreachable } = await safeParseJson(response);
-
-        if (backendUnreachable || !response.ok || !resJson || resJson.success === false) {
-            renderHistoryList([]);
-            return;
-        }
-
-        renderHistoryList(resJson.data?.history || []);
-    } catch (error) {
-        console.error('조회 이력 로드 실패:', error);
-        renderHistoryList([]);
-    }
-}
-
-function renderHistoryList(history) {
-    const listContainer = document.getElementById('history-list');
-    const emptyMsg = document.getElementById('history-empty-msg');
-    if (!listContainer) return;
-
-    if (!history || history.length === 0) {
-        if (emptyMsg) emptyMsg.style.display = 'block';
-        listContainer.innerHTML = '';
-        return;
-    }
-
-    if (emptyMsg) emptyMsg.style.display = 'none';
-
-    listContainer.innerHTML = history.map(h => {
-        const dateText = h.created_at ? new Date(h.created_at).toLocaleString('ko-KR') : '';
-        const levelColor = getRiskColor(h.risk_level);
-        return `
-            <div class="history-item-row">
-                <div class="history-item-main">
-                    <span class="history-addr">${h.address_road || '주소 정보 없음'}</span>
-                    <span class="history-level-badge" style="background:${levelColor}">${h.risk_level ?? '-'}</span>
-                </div>
-                <div class="history-meta">점수 ${h.total_score ?? '-'}점 · 강우 ${h.rainfall_scenario ?? '-'}mm · ${dateText}</div>
-            </div>
-        `;
-    }).join('');
 }
 
 function goToShelterTab() {
@@ -826,8 +623,7 @@ function getRiskColor(level) {
     if (level === '안전') return '#10b981';
     if (level === '주의') return '#f59e0b';
     if (level === '경고') return '#f97316';
-    if (level === '위험') return '#ef4444';
-    return '#94a3b8'; // 분석불가 / 알 수 없음(회색)
+    return '#ef4444';
 }
 
 function switchView(viewId) {
