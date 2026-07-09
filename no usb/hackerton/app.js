@@ -23,6 +23,22 @@ const appState = {
     gridRequestId: 0
 };
 
+/**
+ * fetch 응답을 JSON으로 안전하게 파싱한다.
+ * 백엔드가 502/504 등으로 죽어있으면 Vercel이 JSON이 아닌 HTML/텍스트 에러 페이지를
+ * 대신 내려주는데, 이때 response.json()이 SyntaxError를 던지며 콘솔에 원인이 불분명한
+ * 에러만 남는다. 이 헬퍼로 그 경우를 "백엔드 연결 실패"로 명확히 구분한다.
+ */
+async function safeParseJson(response) {
+    const text = await response.text();
+    try {
+        return { json: JSON.parse(text), backendUnreachable: false };
+    } catch (e) {
+        console.error('JSON 파싱 실패 (백엔드가 응답하지 않음/프록시 오류로 추정):', text.slice(0, 200));
+        return { json: null, backendUnreachable: true };
+    }
+}
+
 // 알림 모달 제어
 function showCustomModal(title, message) {
     document.getElementById('modal-title').innerText = title;
@@ -136,7 +152,12 @@ async function handleSearch() {
 
     try {
         const response = await fetch(`${BASE_URL}/geocode?address=${encodeURIComponent(keyword)}`);
-        const resJson = await response.json();
+        const { json: resJson, backendUnreachable } = await safeParseJson(response);
+
+        if (backendUnreachable) {
+            showCustomModal('백엔드 연결 실패', '백엔드 서버(/api)에 연결할 수 없습니다. 서버가 켜져 있는지, 외부에서 접속 가능한지 확인해 주세요.');
+            return;
+        }
 
         if (response.status === 404) {
             showCustomModal('검색 결과 없음', resJson.error?.message || '해당 주소/건물명을 찾을 수 없습니다.');
@@ -148,11 +169,6 @@ async function handleSearch() {
         }
 
         const geo = resJson.data;
-
-        if (geo.is_valid === false) {
-            showCustomModal('분석 불가 지역', '해당 구역은 침수 분석 정보가 수집되지 않는 구역입니다.');
-            return;
-        }
 
         appState.currentLat = geo.lat;
         appState.currentLng = geo.lng;
@@ -213,7 +229,10 @@ async function fetchRiskScore(rainfallScenario) {
         return { ok: false, notCovered: false, llmFailed: false };
     }
 
-    const resJson = await response.json();
+    const { json: resJson, backendUnreachable } = await safeParseJson(response);
+    if (backendUnreachable || !resJson) {
+        return { ok: false, notCovered: false, llmFailed: false, backendUnreachable: true };
+    }
     if (resJson.success === false) {
         return { ok: false, notCovered: false, llmFailed: false };
     }
@@ -243,7 +262,9 @@ async function loadReportApi() {
         if (!result.ok) {
             errorCard.style.display = 'block';
             mainContent.style.display = 'none';
-            if (result.llmFailed) {
+            if (result.backendUnreachable) {
+                showCustomModal('백엔드 연결 실패', '백엔드 서버(/api)에 연결할 수 없습니다. 서버가 켜져 있는지, 외부에서 접속 가능한지 확인해 주세요.');
+            } else if (result.llmFailed) {
                 showCustomModal('AI 분석 실패', 'AI 위험도 분석 서버 호출에 실패했습니다. 잠시 후 다시 시도해 주세요.');
             }
             return;
@@ -354,7 +375,9 @@ async function loadResponseGuideApi() {
         // 강우 시나리오 변경분을 먼저 risk-score에 반영해 점수/단계 및 score_id를 최신화
         const scoreResult = await fetchRiskScore(appState.currentRainfall);
         if (!scoreResult.ok) {
-            if (scoreResult.llmFailed) {
+            if (scoreResult.backendUnreachable) {
+                showCustomModal('백엔드 연결 실패', '백엔드 서버(/api)에 연결할 수 없습니다. 서버가 켜져 있는지, 외부에서 접속 가능한지 확인해 주세요.');
+            } else if (scoreResult.llmFailed) {
                 showCustomModal('AI 분석 실패', 'AI 위험도 재계산에 실패했습니다. 잠시 후 다시 시도해 주세요.');
             } else if (scoreResult.notCovered) {
                 showCustomModal('분석 불가 지역', '해당 구역은 침수 분석 정보가 수집되지 않는 구역입니다.');
@@ -382,8 +405,8 @@ async function loadResponseGuideApi() {
         }
         if (!response.ok) throw new Error('가이드 조회 실패');
 
-        const resJson = await response.json();
-        if (resJson.success === false) throw new Error('가이드 조회 실패');
+        const { json: resJson, backendUnreachable } = await safeParseJson(response);
+        if (backendUnreachable || !resJson || resJson.success === false) throw new Error('가이드 조회 실패');
         const data = resJson.data;
 
         const chip = document.getElementById('tier-chip');
@@ -406,16 +429,41 @@ async function loadResponseGuideApi() {
         }
 
         // 명세서 response-guide는 사전 준비/대피 판단을 구분하지 않고 guides 배열 하나만 준다.
-        // 우선 전체를 '사전 준비 가이드' 목록에 표시한다. 대피 판단을 별도 카드로 나누려면
-        // 백엔드에 guide 카테고리 구분(prep/evac) 추가를 요청해야 한다.
-        renderChecklist('api-guide-list-prep', data.guides || []);
+        // '대피' 관련 키워드가 포함된 항목을 대피 판단 가이드로, 나머지를 사전 준비 가이드로 분류해
+        // S-03 화면 명세(사전 준비 카드 + 대피 판단 카드)를 재현한다.
+        const { prep, evac } = splitGuidesByEvac(data.guides || []);
+        renderChecklist('api-guide-list-prep', prep.length ? prep : (data.guides || []));
 
         const evacBox = document.getElementById('evac-guide-box');
-        evacBox.style.display = 'none';
+        const isHighRisk = d.risk_level === '경고' || d.risk_level === '위험';
+        if (isHighRisk && evac.length > 0) {
+            renderChecklist('api-guide-list-evac', evac);
+            evacBox.style.display = 'block';
+        } else {
+            evacBox.style.display = 'none';
+        }
 
     } catch (error) {
         console.error(error);
     }
+}
+
+/**
+ * response-guide의 flat한 guides 배열을 대피 관련 키워드 유무로 분류한다.
+ * (백엔드가 prep/evac 카테고리를 분리해서 주지 않으므로 프론트에서 휴리스틱으로 구분)
+ */
+function splitGuidesByEvac(guides) {
+    const evacKeywords = ['대피', '이동하세요', '이동해', '대피소'];
+    const prep = [];
+    const evac = [];
+    guides.forEach(g => {
+        if (evacKeywords.some(k => g.includes(k))) {
+            evac.push(g);
+        } else {
+            prep.push(g);
+        }
+    });
+    return { prep, evac };
 }
 
 function renderChecklist(elementId, items) {
@@ -603,7 +651,64 @@ function setSheetTab(tabId) {
         document.getElementById('tab-fav').classList.add('active');
         document.getElementById('pane-fav').classList.add('active');
         renderFavoritesList();
+    } else if (tabId === 'history') {
+        document.getElementById('tab-history').classList.add('active');
+        document.getElementById('pane-history').classList.add('active');
+        loadHistoryApi();
     }
+}
+
+/**
+ * [연동] GET /api/history 호출로 최근 조회 기록(risk_score 이력, 최신순)을 불러온다.
+ */
+async function loadHistoryApi() {
+    const listContainer = document.getElementById('history-list');
+    const emptyMsg = document.getElementById('history-empty-msg');
+    if (!listContainer) return;
+
+    try {
+        const params = new URLSearchParams({ limit: 20 });
+        const response = await fetch(`${BASE_URL}/history?${params.toString()}`);
+        const { json: resJson, backendUnreachable } = await safeParseJson(response);
+
+        if (backendUnreachable || !response.ok || !resJson || resJson.success === false) {
+            renderHistoryList([]);
+            return;
+        }
+
+        renderHistoryList(resJson.data?.history || []);
+    } catch (error) {
+        console.error('조회 이력 로드 실패:', error);
+        renderHistoryList([]);
+    }
+}
+
+function renderHistoryList(history) {
+    const listContainer = document.getElementById('history-list');
+    const emptyMsg = document.getElementById('history-empty-msg');
+    if (!listContainer) return;
+
+    if (!history || history.length === 0) {
+        if (emptyMsg) emptyMsg.style.display = 'block';
+        listContainer.innerHTML = '';
+        return;
+    }
+
+    if (emptyMsg) emptyMsg.style.display = 'none';
+
+    listContainer.innerHTML = history.map(h => {
+        const dateText = h.created_at ? new Date(h.created_at).toLocaleString('ko-KR') : '';
+        const levelColor = getRiskColor(h.risk_level);
+        return `
+            <div class="history-item-row">
+                <div class="history-item-main">
+                    <span class="history-addr">${h.address_road || '주소 정보 없음'}</span>
+                    <span class="history-level-badge" style="background:${levelColor}">${h.risk_level ?? '-'}</span>
+                </div>
+                <div class="history-meta">점수 ${h.total_score ?? '-'}점 · 강우 ${h.rainfall_scenario ?? '-'}mm · ${dateText}</div>
+            </div>
+        `;
+    }).join('');
 }
 
 function goToShelterTab() {
