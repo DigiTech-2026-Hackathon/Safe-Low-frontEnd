@@ -633,3 +633,5 @@ window.addEventListener('DOMContentLoaded', () => {
     initRealMap();
     tryGeoLocate();
 });
+
+//*푸시가 안돼서 쓰는 주석입니다 무시 해주세요
