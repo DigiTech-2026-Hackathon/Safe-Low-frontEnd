@@ -88,30 +88,14 @@ function initRealMap() {
 
     renderRiskGrid();
     updateFavToggleUI();
-    
-    // 초기화 시 바텀 시트 상태에 맞추어 버튼 위치 실시간 동기화 호출
+    loadWeatherBanner(); // 초기 실행 시 상단 배너 실시간 반영
     syncGeoButtonPosition();
 }
-
-    renderRiskGrid();
-    updateFavToggleUI();
-    
-    // 초기화 시 바텀 시트 상태에 맞춰 버튼 위치를 맞춤 분기 처리
-    const sheet = document.getElementById('main-bottom-sheet');
-    const geoBtn = document.getElementById('geo-btn');
-    if(sheet && geoBtn) {
-        if(sheet.classList.contains('collapsed')) {
-            geoBtn.classList.add('collapsed-state');
-        } else {
-            geoBtn.classList.remove('collapsed-state');
-        }
-    }
 
 function toggleBottomSheet() {
     const sheet = document.getElementById('main-bottom-sheet');
     if (sheet) {
         sheet.classList.toggle('collapsed');
-        // 시트 상태가 바뀔 때 버튼 위치 동기화
         syncGeoButtonPosition();
     }
 }
@@ -245,7 +229,7 @@ async function loadReportApi() {
 
     const data = result.data;
     updateMapLayers(appState.currentLat, appState.currentLng, data.risk_level, appState.currentAddress);
-    await loadWeatherBanner();
+    await loadWeatherBanner(); // 내부 데이터 기반으로 배너 갱신
 
     setTextWithPulse(document.getElementById('api-report-score'), data.total_score);
     const gradeEl = document.getElementById('api-report-grade');
@@ -317,6 +301,10 @@ async function loadResponseGuideApi() {
         if (!scoreResult.ok) return;
         d = scoreResult.data;
     }
+
+    // 슬라이더를 통해 변동된 위험도를 전역 상태 및 상단 알림 배너에 동기화
+    appState.currentLevel = d.risk_level;
+    loadWeatherBanner();
 
     setTextWithPulse(document.getElementById('api-recalc-score'), d.total_score);
     const recalcGrade = document.getElementById('api-recalc-grade');
@@ -392,23 +380,26 @@ function retryResponseGuide() {
     loadResponseGuideApi();
 }
 
+/**
+ * 변경 요청 사항: 외부 API 대신 앱의 실제 위험 상태에 맞춤 연동 구현
+ */
 async function loadWeatherBanner() {
-    try {
-        const params = new URLSearchParams({ lat: appState.currentLat, lng: appState.currentLng });
-        const response = await fetch(`${BASE_URL}/rainfall?${params.toString()}`);
-        const banner = document.getElementById('weather-alert-banner');
-        if (!banner) return;
+    const banner = document.getElementById('weather-alert-banner');
+    if (!banner) return;
 
-        if (!response.ok) { banner.style.display = 'none'; return; }
-        const resJson = await response.json();
-        if (resJson.success && resJson.data?.warning_level) {
-            banner.innerText = `기상 특보: ${resJson.data.warning_level} 발령 중 (${resJson.data.current_rainfall_mm}mm/h)`;
-            banner.style.display = 'block';
-        } else {
-            banner.style.display = 'none';
-        }
-    } catch (e) {
-        console.error(e);
+    const level = appState.currentLevel || '안전';
+    const col = getRiskColor(level);
+    
+    // 배너 배경색 및 그림자 효과를 위험도 테마 컬러로 실시간 매핑
+    banner.style.background = col;
+    banner.style.boxShadow = `0 4px 10px ${col}40`; 
+
+    if (level === '안전') {
+        banner.innerText = '현재 상태: 침수 위험 안전';
+        banner.style.display = 'block'; 
+    } else {
+        banner.innerText = `⚠️ 침수 위험 경보: [${level}] 단계 발령 중`;
+        banner.style.display = 'block';
     }
 }
 
@@ -494,12 +485,12 @@ async function renderRiskGrid() {
 
         cells.forEach(cell => {
             const col = getRiskColor(cell.risk_level);
-           const rect = L.rectangle([
-    [cell.lat - cellSize / 2, cell.lng - cellSize / 2],
-    [cell.lat + cellSize / 2, cell.lng + cellSize / 2]
-], {
-    stroke: false, fillColor: col, fillOpacity: 0.35, interactive: false
-}).addTo(appState.mapInstance);
+            const rect = L.rectangle([
+                [cell.lat - cellSize / 2, cell.lng - cellSize / 2],
+                [cell.lat + cellSize / 2, cell.lng + cellSize / 2]
+            ], {
+                stroke: false, fillColor: col, fillOpacity: 0.35, interactive: false
+            }).addTo(appState.mapInstance);
             appState.gridLayers.push(rect);
         });
     } catch (error) {
@@ -708,13 +699,10 @@ function syncGeoButtonPosition() {
     if (!sheet || !geoBtn) return;
     
     if (sheet.classList.contains('collapsed')) {
-        // 바텀시트가 내려갔을 때: 버튼도 아래로 내려가서 접힌 시트 바로 위에 안착
-        // 시트 전체 높이에서 보여지는 54px를 뺀 만큼 내려가므로, 버튼은 그에 맞춰 이동
         const sheetHeight = sheet.offsetHeight;
         const moveDistance = sheetHeight - 54;
         geoBtn.style.transform = `translateY(${moveDistance - 12}px)`;
     } else {
-        // 바텀시트가 올라왔을 때: 기본 원래 위치(바텀시트 바로 위)로 복귀
         geoBtn.style.transform = 'translateY(-12px)';
     }
 }
